@@ -37,7 +37,7 @@ def build_app():
     with gr.Blocks(title="Report Gradio - Gestor de Gastos") as demo:
         gr.Markdown("# 💸 Report Gradio\nApp para gestionar gastos compartidos entre Marco y Chiara")
 
-        with gr.Tabs(id="main_tabs"):
+        with gr.Tabs():
             # Tab 1: Ingresar Gasto
             with gr.Tab(label="1️⃣ Ingresar Gasto", id="tab_ingresar_gasto"):
                 tab_ingresar_gasto.build_tab()

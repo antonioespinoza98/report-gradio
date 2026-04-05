@@ -7,7 +7,7 @@ from utils.constants import PERSONAS, RESPONSABLE_OPTIONS
 def build_tab():
     """Build the 'Tablas Predeterminadas' tab with 5 sub-tabs."""
 
-    with gr.Tabs(id="tablas_tabs"):
+    with gr.Tabs():
 
             # Sub-tab 1: Gastos Fijos
             with gr.Tab(label="Gastos Fijos", id="gastos_fijos_tab"):

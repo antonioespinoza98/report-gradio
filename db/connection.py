@@ -12,7 +12,8 @@ def init_pool():
     if not db_url:
         raise ValueError("DATABASE_URL environment variable is not set")
 
-    _pool = psycopg2.pool.ThreadedConnectionPool(1, 20, db_url)
+    schema = os.getenv("DB_SCHEMA", "public")
+    _pool = psycopg2.pool.ThreadedConnectionPool(1, 20, db_url, options=f"-c search_path={schema}")
 
 @contextmanager
 def get_connection():

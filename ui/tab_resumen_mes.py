@@ -74,7 +74,7 @@ def build_tab():
                 pivot_data.append(row_data)
             pivot_df = pl.DataFrame(pivot_data)
         else:
-            pivot_df = pl.DataFrame(columns=["Gasto"] + PERSONAS)
+            pivot_df = pl.DataFrame(schema={"Gasto": pl.Utf8, "Marco": pl.Boolean, "Chiara": pl.Boolean})
 
         return pivot_df
 
@@ -82,8 +82,7 @@ def build_tab():
     payment_table = gr.Dataframe(
         value=initial_data,
         interactive=True,
-        label="Estado de pagos",
-        datatype=["str", "bool", "bool"]
+        label="Estado de pagos"
     )
 
     def on_month_change(mes, anio):
