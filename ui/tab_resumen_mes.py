@@ -94,7 +94,14 @@ def build_tab():
 
     def on_payment_edit(updated_df, mes, anio):
         """Handle checkbox changes in the payment table."""
-        if updated_df is None or updated_df.is_empty():
+        if updated_df is None:
+            return load_month_data(mes, anio)
+
+        # Gradio may pass a pandas DataFrame — convert to Polars
+        if not isinstance(updated_df, pl.DataFrame):
+            updated_df = pl.from_pandas(updated_df)
+
+        if updated_df.is_empty():
             return load_month_data(mes, anio)
 
         try:
@@ -102,7 +109,7 @@ def build_tab():
             anio = int(anio) if isinstance(anio, float) else anio
 
             # Convert DataFrame to rows
-            updated_rows = updated_df.to_dicts() if isinstance(updated_df, pl.DataFrame) else updated_df
+            updated_rows = updated_df.to_dicts()
 
             # Get all gastos_fijos for mapping gasto -> gasto_fijo_id
             gf_rows = gastos_fijos.get_all()

@@ -13,6 +13,12 @@ def _safe_load(fn, empty_schema: dict):
     except Exception:
         return pl.DataFrame(empty_schema)
 
+def _to_polars(df) -> pl.DataFrame:
+    """Ensure df is a Polars DataFrame (Gradio sometimes passes pandas)."""
+    if isinstance(df, pl.DataFrame):
+        return df
+    return pl.from_pandas(df)
+
 def _sync_table(display_df, state_rows: list[dict], model, display_cols: list[str]):
     """
     Diff display_df against state_rows and persist inserts/updates/deletes.
@@ -71,6 +77,7 @@ def build_tab():
             )
 
             def save_gf(df, state):
+                df = _to_polars(df)
                 try:
                     _sync_table(df, state, gastos_fijos, ["gasto", "total"])
                     new_rows = gastos_fijos.get_all()
@@ -112,6 +119,7 @@ def build_tab():
             )
 
             def save_ing(df, state):
+                df = _to_polars(df)
                 try:
                     new_rows_raw = df.to_dicts() if isinstance(df, pl.DataFrame) else df
                     # Remap display col names → DB col names
@@ -154,6 +162,7 @@ def build_tab():
             )
 
             def save_ah(df, state):
+                df = _to_polars(df)
                 try:
                     new_rows_raw = df.to_dicts() if isinstance(df, pl.DataFrame) else df
                     mapped = [{"ahorro": r.get("Ahorro", ""), "total": r.get("Total", 0)} for r in new_rows_raw]
@@ -199,6 +208,7 @@ def build_tab():
             )
 
             def save_resp(df, state):
+                df = _to_polars(df)
                 try:
                     new_rows_raw = df.to_dicts() if isinstance(df, pl.DataFrame) else df
                     mapped = [{"gasto": r.get("Gasto", ""), "responsable": r.get("Responsable", RESPONSABLE_OPTIONS[0]), "monto": r.get("Monto", 0)} for r in new_rows_raw]
