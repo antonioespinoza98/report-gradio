@@ -79,7 +79,8 @@ def build_tab():
             def save_gf(df, state):
                 df = _to_polars(df)
                 try:
-                    _sync_table(df, state, gastos_fijos, ["gasto", "total"])
+                    mapped = [{"gasto": r.get("Gasto", ""), "total": r.get("Total", 0)} for r in df.to_dicts()]
+                    _sync_table(pl.DataFrame(mapped), state, gastos_fijos, ["gasto", "total"])
                     new_rows = gastos_fijos.get_all()
                     gf_state.value = new_rows
                     return pl.DataFrame({"Gasto": [r["gasto"] for r in new_rows], "Total": [r["total"] for r in new_rows]}), new_rows
