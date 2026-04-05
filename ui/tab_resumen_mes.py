@@ -85,19 +85,19 @@ def build_tab():
     payment_table = gr.Dataframe(
         value=initial_data,
         interactive=True,
-        label="Estado de pagos"
+        label="Estado de pagos — marca los checkboxes y presiona Guardar"
     )
 
+    save_button = gr.Button("💾 Guardar pagos", variant="primary")
+
     def on_month_change(mes, anio):
-        """Reload data when month changes."""
         return load_month_data(mes, anio)
 
-    def on_payment_edit(updated_df, mes, anio):
-        """Handle checkbox changes in the payment table."""
+    def on_payment_save(updated_df, mes, anio):
+        """Save checkbox state to DB."""
         if updated_df is None:
             return load_month_data(mes, anio)
 
-        # Gradio may pass a pandas DataFrame — convert to Polars
         if not isinstance(updated_df, pl.DataFrame):
             updated_df = pl.from_pandas(updated_df)
 
@@ -108,42 +108,20 @@ def build_tab():
             mes = int(mes) if isinstance(mes, float) else mes
             anio = int(anio) if isinstance(anio, float) else anio
 
-            # Convert DataFrame to rows
-            updated_rows = updated_df.to_dicts()
-
-            # Get all gastos_fijos for mapping gasto -> gasto_fijo_id
             gf_rows = gastos_fijos.get_all()
             gf_map = {row["gasto"]: row["id"] for row in gf_rows}
 
-            # Update each changed cell
-            for row in updated_rows:
-                gasto = row["Gasto"]
-                gasto_fijo_id = gf_map.get(gasto)
+            for row in updated_df.to_dicts():
+                gasto_fijo_id = gf_map.get(row["Gasto"])
                 if gasto_fijo_id:
                     for persona in PERSONAS:
-                        pagado = row.get(persona, False)
-                        pagos_fijos.toggle_pago(gasto_fijo_id, persona, mes, anio, pagado)
+                        pagos_fijos.toggle_pago(gasto_fijo_id, persona, mes, anio, bool(row.get(persona, False)))
 
             return load_month_data(mes, anio)
         except Exception as e:
-            gr.Error(f"Error al actualizar: {str(e)}")
+            gr.Error(f"Error al guardar: {str(e)}")
             return load_month_data(mes, anio)
 
-    # Wire month selector
-    mes_input.change(
-        fn=on_month_change,
-        inputs=[mes_input, anio_input],
-        outputs=[payment_table]
-    )
-    anio_input.change(
-        fn=on_month_change,
-        inputs=[mes_input, anio_input],
-        outputs=[payment_table]
-    )
-
-    # Wire payment table edits
-    payment_table.change(
-        fn=on_payment_edit,
-        inputs=[payment_table, mes_input, anio_input],
-        outputs=[payment_table]
-    )
+    mes_input.change(fn=on_month_change, inputs=[mes_input, anio_input], outputs=[payment_table])
+    anio_input.change(fn=on_month_change, inputs=[mes_input, anio_input], outputs=[payment_table])
+    save_button.click(fn=on_payment_save, inputs=[payment_table, mes_input, anio_input], outputs=[payment_table])
