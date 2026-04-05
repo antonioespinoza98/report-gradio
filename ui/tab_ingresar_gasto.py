@@ -67,8 +67,11 @@ def build_tab():
 
     # Display last 10 expenses
     gr.Markdown("### Últimos 10 gastos")
-    recent = gastos.get_last_n(10)
-    initial_df = gastos_transform.to_display_df(recent)
+    try:
+        recent = gastos.get_last_n(10)
+        initial_df = gastos_transform.to_display_df(recent)
+    except Exception:
+        initial_df = gastos_transform.to_display_df([])
 
     gastos_table = gr.Dataframe(
         value=initial_df,

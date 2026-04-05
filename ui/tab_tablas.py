@@ -21,7 +21,10 @@ def build_tab():
                     df = pl.DataFrame(rows) if rows else pl.DataFrame({"id": [], "gasto": [], "total": []})
                     return df
 
-                initial_gf = load_gastos_fijos()
+                try:
+                    initial_gf = load_gastos_fijos()
+                except Exception:
+                    initial_gf = pl.DataFrame({"id": [], "gasto": [], "total": []})
                 gf_table = gr.Dataframe(
                     value=initial_gf,
                     interactive=True,
@@ -81,7 +84,10 @@ def build_tab():
                     df = pl.DataFrame(rows) if rows else pl.DataFrame({"id": [], "tipo_ingreso": [], "total": [], "persona": []})
                     return df
 
-                initial_ing = load_ingresos()
+                try:
+                    initial_ing = load_ingresos()
+                except Exception:
+                    initial_ing = pl.DataFrame({"id": [], "tipo_ingreso": [], "total": [], "persona": []})
                 ing_table = gr.Dataframe(
                     value=initial_ing,
                     interactive=True,
@@ -137,7 +143,10 @@ def build_tab():
                     df = pl.DataFrame(rows) if rows else pl.DataFrame({"id": [], "ahorro": [], "total": []})
                     return df
 
-                initial_ah = load_ahorros()
+                try:
+                    initial_ah = load_ahorros()
+                except Exception:
+                    initial_ah = pl.DataFrame({"id": [], "ahorro": [], "total": []})
                 ah_table = gr.Dataframe(
                     value=initial_ah,
                     interactive=True,
@@ -193,7 +202,10 @@ def build_tab():
                     df = pl.DataFrame(rows) if rows else pl.DataFrame({"id": [], "gasto": [], "responsable": [], "monto": []})
                     return df
 
-                initial_resp = load_responsable()
+                try:
+                    initial_resp = load_responsable()
+                except Exception:
+                    initial_resp = pl.DataFrame({"id": [], "gasto": [], "responsable": [], "monto": []})
                 resp_table = gr.Dataframe(
                     value=initial_resp,
                     interactive=True,
@@ -248,7 +260,10 @@ def build_tab():
                     df = resumen_transform.calc_resumen(ing_rows, gast_rows, resp_rows)
                     return df
 
-                initial_resumen = load_resumen()
+                try:
+                    initial_resumen = load_resumen()
+                except Exception:
+                    initial_resumen = pl.DataFrame({"Persona": [], "Ingreso": [], "Total Gasto": [], "Sobrante": []})
                 resumen_table = gr.Dataframe(
                     value=initial_resumen,
                     interactive=False,

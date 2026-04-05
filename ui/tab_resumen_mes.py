@@ -78,7 +78,10 @@ def build_tab():
 
         return pivot_df
 
-    initial_data = load_month_data(current_month, current_year)
+    try:
+        initial_data = load_month_data(current_month, current_year)
+    except Exception:
+        initial_data = pl.DataFrame(schema={"Gasto": pl.Utf8, "Marco": pl.Boolean, "Chiara": pl.Boolean})
     payment_table = gr.Dataframe(
         value=initial_data,
         interactive=True,

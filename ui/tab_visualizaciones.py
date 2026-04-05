@@ -85,7 +85,11 @@ def build_tab():
     init_date_from = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
     init_date_to = datetime.now().strftime("%Y-%m-%d")
 
-    fig1, fig2, fig3, fig4 = load_charts("Ambos", None, init_date_from, init_date_to)
+    try:
+        fig1, fig2, fig3, fig4 = load_charts("Ambos", None, init_date_from, init_date_to)
+    except Exception:
+        import plotly.graph_objects as go
+        fig1 = fig2 = fig3 = fig4 = go.Figure()
 
     # Charts
     with gr.Row():
