@@ -1,6 +1,16 @@
 import polars as pl
 from datetime import date
 
+def _parse_date(d):
+    if d is None:
+        return None
+    if isinstance(d, date):
+        return d
+    try:
+        return date.fromisoformat(str(d))
+    except Exception:
+        return None
+
 def to_display_df(rows: list[dict]) -> pl.DataFrame:
     """Convert raw rows to a Polars DataFrame for display in gr.Dataframe."""
     if not rows:
@@ -41,10 +51,12 @@ def filter_df(rows: list[dict], persona=None, categoria=None, date_from=None, da
         df = df.filter(pl.col("persona") == persona)
     if categoria:
         df = df.filter(pl.col("categoria") == categoria)
-    if date_from:
-        df = df.filter(pl.col("fecha") >= date_from)
-    if date_to:
-        df = df.filter(pl.col("fecha") <= date_to)
+    d_from = _parse_date(date_from)
+    d_to = _parse_date(date_to)
+    if d_from:
+        df = df.filter(pl.col("fecha") >= d_from)
+    if d_to:
+        df = df.filter(pl.col("fecha") <= d_to)
 
     return df.select([
         pl.col("id").alias("ID"),
