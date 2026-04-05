@@ -98,11 +98,20 @@ def build_tab():
         if updated_df is None:
             return load_month_data(mes, anio)
 
-        if not isinstance(updated_df, pl.DataFrame):
-            updated_df = pl.from_pandas(updated_df)
+        # Gradio passes the df as pandas with booleans as strings ('true'/'false')
+        # Convert to list of dicts manually to avoid type issues
+        if isinstance(updated_df, pl.DataFrame):
+            rows_data = updated_df.to_dicts()
+        else:
+            rows_data = updated_df.to_dict(orient="records")
 
-        if updated_df.is_empty():
+        if not rows_data:
             return load_month_data(mes, anio)
+
+        def to_bool(val):
+            if isinstance(val, bool):
+                return val
+            return str(val).lower() in ("true", "1", "yes")
 
         try:
             mes = int(mes) if isinstance(mes, float) else mes
@@ -111,11 +120,11 @@ def build_tab():
             gf_rows = gastos_fijos.get_all()
             gf_map = {row["gasto"]: row["id"] for row in gf_rows}
 
-            for row in updated_df.to_dicts():
+            for row in rows_data:
                 gasto_fijo_id = gf_map.get(row["Gasto"])
                 if gasto_fijo_id:
                     for persona in PERSONAS:
-                        pagos_fijos.toggle_pago(gasto_fijo_id, persona, mes, anio, bool(row.get(persona, False)))
+                        pagos_fijos.toggle_pago(gasto_fijo_id, persona, mes, anio, to_bool(row.get(persona, False)))
 
             return load_month_data(mes, anio)
         except Exception as e:
