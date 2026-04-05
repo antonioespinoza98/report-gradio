@@ -1,4 +1,3 @@
-gradio
 polars
 psycopg2-binary
 plotly
