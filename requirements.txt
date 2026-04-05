@@ -1,6 +1,5 @@
-gradio>=5.0.0
-polars>=0.20.0
-psycopg2-binary>=2.9.9
-plotly>=5.20.0
-python-dotenv>=1.0.0
-pyaudioop>=0.2.0
+gradio
+polars
+psycopg2-binary
+plotly
+python-dotenv
