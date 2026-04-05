@@ -3,3 +3,4 @@ polars
 psycopg2-binary
 plotly
 python-dotenv
+audioop-lts
