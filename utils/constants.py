@@ -9,6 +9,7 @@ CATEGORIAS = [
     "Farmacia",
     "Servicios",
     "Ropa",
+    "Ahorro Personal",
     "Otros"
 ]
 

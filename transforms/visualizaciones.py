@@ -119,18 +119,18 @@ def comparativa_personas(rows: list[dict], date_from=None, date_to=None) -> go.F
 
 def tipo_gasto_por_categoria(
     rows: list[dict],
-    persona_filter=None,
+    tipo_filter=None,
     date_from=None,
     date_to=None,
 ) -> go.Figure:
-    """Grouped bar chart: amount per category split by tipo_de_gasto, filtered by persona."""
+    """Grouped bar chart: amount per category per persona, filtered by tipo_de_gasto."""
     if not rows:
         return _empty_fig()
 
     df = pl.DataFrame(rows)
 
-    if persona_filter and persona_filter != "Ambos":
-        df = df.filter(pl.col("persona") == persona_filter)
+    if tipo_filter:
+        df = df.filter(pl.col("tipo_de_gasto") == tipo_filter)
 
     df = _filter_dates(df, date_from, date_to)
 
@@ -138,29 +138,27 @@ def tipo_gasto_por_categoria(
         return _empty_fig()
 
     summary = (
-        df.group_by(["categoria", "tipo_de_gasto"])
+        df.group_by(["categoria", "persona"])
         .agg(pl.col("monto").sum().alias("total"))
-        .sort(["categoria", "tipo_de_gasto"])
+        .sort(["categoria", "persona"])
     )
 
-    tipos = sorted(summary["tipo_de_gasto"].unique().to_list())
+    personas = sorted(summary["persona"].unique().to_list())
     categorias = sorted(summary["categoria"].unique().to_list())
-    colors = {"Gasto Común": "steelblue", "Gasto Personal": "coral"}
+    colors = {"Marco": "steelblue", "Chiara": "coral"}
 
     fig = go.Figure()
-    for tipo in tipos:
-        tipo_df = summary.filter(pl.col("tipo_de_gasto") == tipo)
-        tipo_map = dict(zip(tipo_df["categoria"].to_list(), tipo_df["total"].to_list()))
+    for persona in personas:
+        p_df = summary.filter(pl.col("persona") == persona)
+        p_map = dict(zip(p_df["categoria"].to_list(), p_df["total"].to_list()))
         fig.add_trace(go.Bar(
-            name=tipo,
+            name=persona,
             x=categorias,
-            y=[tipo_map.get(c, 0) for c in categorias],
-            marker_color=colors.get(tipo, "grey"),
+            y=[p_map.get(c, 0) for c in categorias],
+            marker_color=colors.get(persona, "grey"),
         ))
 
-    title = "Tipo de Gasto por Categoría"
-    if persona_filter and persona_filter != "Ambos":
-        title += f" — {persona_filter}"
+    title = f"Tipo de Gasto por Categoría — {tipo_filter}" if tipo_filter else "Tipo de Gasto por Categoría"
 
     fig.update_layout(
         title=title,
@@ -168,7 +166,7 @@ def tipo_gasto_por_categoria(
         yaxis_title="Monto",
         barmode="group",
         hovermode="x unified",
-        legend_title="Tipo",
+        legend_title="Persona",
     )
     return fig
 

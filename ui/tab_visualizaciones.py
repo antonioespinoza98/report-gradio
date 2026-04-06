@@ -2,7 +2,7 @@ import gradio as gr
 from datetime import datetime, timedelta
 from models import gastos, gastos_fijos, pagos_fijos, pagos_ahorros, responsable_gastos, ahorros
 from transforms import visualizaciones
-from utils.constants import PERSONAS, CATEGORIAS
+from utils.constants import PERSONAS, CATEGORIAS, TIPO_GASTO_OPTIONS
 
 def build_tab():
     """Build the 'Visualizaciones' tab with 6 chart types."""
@@ -142,26 +142,26 @@ def build_tab():
     # ── Tipo de Gasto por Categoría ─────────────────────────────────────────────
     gr.Markdown("---\n#### Tipo de Gasto por Categoría")
     with gr.Row():
-        tipo_persona_filter = gr.Dropdown(
-            choices=PERSONAS + ["Ambos"],
-            value="Ambos",
-            label="Persona",
+        tipo_filter = gr.Dropdown(
+            choices=TIPO_GASTO_OPTIONS,
+            value=TIPO_GASTO_OPTIONS[0],
+            label="Tipo de Gasto",
             interactive=True
         )
 
-    def load_tipo_chart(persona, date_from, date_to):
+    def load_tipo_chart(tipo, date_from, date_to):
         gast_rows = gastos.get_filtered(persona=None, categoria=None, date_from=date_from, date_to=date_to)
-        return visualizaciones.tipo_gasto_por_categoria(gast_rows, persona_filter=persona, date_from=date_from, date_to=date_to)
+        return visualizaciones.tipo_gasto_por_categoria(gast_rows, tipo_filter=tipo, date_from=date_from, date_to=date_to)
 
     try:
-        fig8 = load_tipo_chart("Ambos", init_date_from, init_date_to)
+        fig8 = load_tipo_chart(TIPO_GASTO_OPTIONS[0], init_date_from, init_date_to)
     except Exception:
         import plotly.graph_objects as go
         fig8 = go.Figure()
 
     plot8 = gr.Plot(value=fig8, label="Tipo de Gasto por Categoría")
 
-    tipo_inputs = [tipo_persona_filter, date_from_input, date_to_input]
+    tipo_inputs = [tipo_filter, date_from_input, date_to_input]
 
     # ── Wire events ─────────────────────────────────────────────────────────────
 
@@ -173,7 +173,7 @@ def build_tab():
     persona_filter.change(fn=load_charts, inputs=all_inputs, outputs=all_outputs)
     mes_fijos.change(fn=load_charts, inputs=all_inputs, outputs=all_outputs)
     anio_fijos.change(fn=load_charts, inputs=all_inputs, outputs=all_outputs)
-    tipo_persona_filter.change(fn=load_tipo_chart, inputs=tipo_inputs, outputs=[plot8])
+    tipo_filter.change(fn=load_tipo_chart, inputs=tipo_inputs, outputs=[plot8])
 
     def load_all(persona, categoria, date_from, date_to, mes, anio):
         charts = load_charts(persona, categoria, date_from, date_to, mes, anio)
