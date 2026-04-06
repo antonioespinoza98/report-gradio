@@ -144,10 +144,24 @@ def gastos_fijos_por_gasto(gastos_fijos_rows: list[dict]) -> go.Figure:
     return fig
 
 
-def estado_pagos_mes(pagos_fijos_rows: list[dict], gastos_fijos_rows: list[dict]) -> go.Figure:
-    """Heatmap showing payment status (paid/unpaid) per expense per person."""
+def estado_pagos_mes(
+    pagos_fijos_rows: list[dict],
+    gastos_fijos_rows: list[dict],
+    responsable_rows: list[dict] | None = None,
+) -> go.Figure:
+    """Heatmap showing payment status per expense per person.
+
+    Cells where the persona is not responsible (based on responsable_gastos)
+    are shown in grey with 'N/A' instead of 'Pendiente'.
+    """
     if not pagos_fijos_rows or not gastos_fijos_rows:
         return _empty_fig("Sin datos de pagos para este período")
+
+    # responsable_gastos: gasto_name → responsable ("Marco", "Chiara", "Ambos")
+    resp_map: dict[str, str] = {}
+    if responsable_rows:
+        for r in responsable_rows:
+            resp_map[r["gasto"]] = r["responsable"]
 
     gf_df = pl.DataFrame(gastos_fijos_rows).select(["id", "gasto"])
     pf_df = pl.DataFrame(pagos_fijos_rows)
@@ -156,18 +170,36 @@ def estado_pagos_mes(pagos_fijos_rows: list[dict], gastos_fijos_rows: list[dict]
     gastos_names = sorted(merged["gasto"].unique().to_list())
     personas = sorted(merged["persona"].unique().to_list())
 
+    # z values: None = N/A, 0 = Pendiente, 1 = Pagado
     z = []
     text = []
     for persona in personas:
         persona_df = merged.filter(pl.col("persona") == persona)
         paid_map = {r["gasto"]: r["pagado"] for r in persona_df.to_dicts()}
-        z.append([1 if paid_map.get(g, False) else 0 for g in gastos_names])
-        text.append(["Pagado" if paid_map.get(g, False) else "Pendiente" for g in gastos_names])
+
+        row_z = []
+        row_text = []
+        for g in gastos_names:
+            resp = resp_map.get(g)
+            # Not responsible: responsable is set to the other person (not Ambos, not this persona)
+            if resp and resp != "Ambos" and resp != persona:
+                row_z.append(None)
+                row_text.append("N/A")
+            elif paid_map.get(g, False):
+                row_z.append(1)
+                row_text.append("Pagado")
+            else:
+                row_z.append(0)
+                row_text.append("Pendiente")
+        z.append(row_z)
+        text.append(row_text)
 
     fig = go.Figure(data=go.Heatmap(
         z=z,
         x=gastos_names,
         y=personas,
+        zmin=0,
+        zmax=1,
         colorscale=[[0, "#e74c3c"], [1, "#2ecc71"]],
         showscale=False,
         text=text,
@@ -176,6 +208,75 @@ def estado_pagos_mes(pagos_fijos_rows: list[dict], gastos_fijos_rows: list[dict]
     ))
     fig.update_layout(
         title="Estado de Pagos del Mes",
+        xaxis_title="",
+        yaxis_title="",
+        xaxis=dict(side="bottom"),
+    )
+    return fig
+
+
+def estado_ahorros_mes(
+    pagos_ahorros_rows: list[dict],
+    ahorros_rows: list[dict],
+    responsable_rows: list[dict] | None = None,
+) -> go.Figure:
+    """Heatmap showing savings deposit status per ahorro per person.
+
+    Uses responsable_gastos (matched by name against ahorros.ahorro) to mark
+    cells N/A for personas who are not responsible for a given ahorro.
+    """
+    if not pagos_ahorros_rows or not ahorros_rows:
+        return _empty_fig("Sin datos de ahorros para este período")
+
+    # Build responsable map from responsable_gastos: ahorro_name → responsable
+    resp_map: dict[str, str] = {}
+    if responsable_rows:
+        for r in responsable_rows:
+            resp_map[r["gasto"]] = r["responsable"]
+
+    ah_df = pl.DataFrame(ahorros_rows).select(["id", "ahorro"])
+    pa_df = pl.DataFrame(pagos_ahorros_rows)
+    merged = pa_df.join(ah_df, left_on="ahorro_id", right_on="id")
+
+    ahorro_names = sorted(merged["ahorro"].unique().to_list())
+    personas = sorted(merged["persona"].unique().to_list())
+
+    z = []
+    text = []
+    for persona in personas:
+        persona_df = merged.filter(pl.col("persona") == persona)
+        paid_map = {r["ahorro"]: r["pagado"] for r in persona_df.to_dicts()}
+
+        row_z = []
+        row_text = []
+        for a in ahorro_names:
+            resp = resp_map.get(a)
+            if resp and resp != "Ambos" and resp != persona:
+                row_z.append(None)
+                row_text.append("N/A")
+            elif paid_map.get(a, False):
+                row_z.append(1)
+                row_text.append("Depositado")
+            else:
+                row_z.append(0)
+                row_text.append("Pendiente")
+        z.append(row_z)
+        text.append(row_text)
+
+    fig = go.Figure(data=go.Heatmap(
+        z=z,
+        x=ahorro_names,
+        y=personas,
+        zmin=0,
+        zmax=1,
+        colorscale=[[0, "#e74c3c"], [1, "#2ecc71"]],
+        showscale=False,
+        text=text,
+        texttemplate="%{text}",
+        hovertemplate="%{y} — %{x}: %{text}<extra></extra>",
+    ))
+    fig.update_layout(
+        title="Estado de Depósitos de Ahorro del Mes",
         xaxis_title="",
         yaxis_title="",
         xaxis=dict(side="bottom"),

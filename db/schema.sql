@@ -78,3 +78,20 @@ CREATE TABLE IF NOT EXISTS pagos_fijos (
 );
 
 CREATE INDEX IF NOT EXISTS idx_pagos_fijos_periodo ON pagos_fijos (anio, mes);
+
+-- ============================================================
+-- PAGOS AHORROS: Tab visualizaciones — tracking depósitos de ahorro
+-- Similar a pagos_fijos pero para la tabla ahorros.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS pagos_ahorros (
+    id          SERIAL PRIMARY KEY,
+    ahorro_id   INTEGER         NOT NULL REFERENCES ahorros(id) ON DELETE CASCADE,
+    persona     VARCHAR(50)     NOT NULL CHECK (persona IN ('Marco', 'Chiara')),
+    mes         SMALLINT        NOT NULL CHECK (mes BETWEEN 1 AND 12),
+    anio        SMALLINT        NOT NULL CHECK (anio >= 2020),
+    pagado      BOOLEAN         NOT NULL DEFAULT FALSE,
+    updated_at  TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    UNIQUE (ahorro_id, persona, mes, anio)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pagos_ahorros_periodo ON pagos_ahorros (anio, mes);

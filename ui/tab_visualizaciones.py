@@ -1,6 +1,6 @@
 import gradio as gr
 from datetime import datetime, timedelta
-from models import gastos, gastos_fijos, pagos_fijos
+from models import gastos, gastos_fijos, pagos_fijos, pagos_ahorros, responsable_gastos, ahorros
 from transforms import visualizaciones
 from utils.constants import PERSONAS, CATEGORIAS
 
@@ -92,20 +92,37 @@ def build_tab():
             pf_rows = [r for r in pf_rows if r["mes"] == mes and r["anio"] == anio]
         except Exception:
             pf_rows = []
-        fig6 = visualizaciones.estado_pagos_mes(pf_rows, gf_rows)
+        try:
+            resp_rows = responsable_gastos.get_all()
+        except Exception:
+            resp_rows = []
+        fig6 = visualizaciones.estado_pagos_mes(pf_rows, gf_rows, resp_rows)
 
-        return fig1, fig2, fig3, fig4, fig5, fig6
+        # Estado de depósitos de ahorro
+        try:
+            pagos_ahorros.get_or_create_for_month(mes, anio)
+            pa_rows = pagos_ahorros.get_all()
+            pa_rows = [r for r in pa_rows if r["mes"] == mes and r["anio"] == anio]
+        except Exception:
+            pa_rows = []
+        try:
+            ah_rows = ahorros.get_all()
+        except Exception:
+            ah_rows = []
+        fig7 = visualizaciones.estado_ahorros_mes(pa_rows, ah_rows, resp_rows)
+
+        return fig1, fig2, fig3, fig4, fig5, fig6, fig7
 
     init_date_from = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
     init_date_to = datetime.now().strftime("%Y-%m-%d")
 
     try:
-        fig1, fig2, fig3, fig4, fig5, fig6 = load_charts(
+        fig1, fig2, fig3, fig4, fig5, fig6, fig7 = load_charts(
             "Ambos", None, init_date_from, init_date_to, current_month, current_year
         )
     except Exception:
         import plotly.graph_objects as go
-        fig1 = fig2 = fig3 = fig4 = fig5 = fig6 = go.Figure()
+        fig1 = fig2 = fig3 = fig4 = fig5 = fig6 = fig7 = go.Figure()
 
     with gr.Row():
         plot1 = gr.Plot(value=fig1, label="Gastos por Categoría")
@@ -119,8 +136,11 @@ def build_tab():
         plot5 = gr.Plot(value=fig5, label="Gastos Fijos por Concepto")
         plot6 = gr.Plot(value=fig6, label="Estado de Pagos del Mes")
 
+    with gr.Row():
+        plot7 = gr.Plot(value=fig7, label="Estado de Depósitos de Ahorro del Mes")
+
     all_inputs = [persona_filter, categoria_filter, date_from_input, date_to_input, mes_fijos, anio_fijos]
-    all_outputs = [plot1, plot2, plot3, plot4, plot5, plot6]
+    all_outputs = [plot1, plot2, plot3, plot4, plot5, plot6, plot7]
 
     refresh_button.click(fn=load_charts, inputs=all_inputs, outputs=all_outputs)
     persona_filter.change(fn=load_charts, inputs=all_inputs, outputs=all_outputs)
