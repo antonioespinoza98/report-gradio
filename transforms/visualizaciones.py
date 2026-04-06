@@ -157,11 +157,18 @@ def estado_pagos_mes(
     if not pagos_fijos_rows or not gastos_fijos_rows:
         return _empty_fig("Sin datos de pagos para este período")
 
-    # responsable_gastos: gasto_name → responsable ("Marco", "Chiara", "Ambos")
-    resp_map: dict[str, str] = {}
+    # Build a set of responsible personas per gasto.
+    # Handles multiple rows for the same gasto (e.g. one row per persona instead of "Ambos").
+    resp_set: dict[str, set] = {}
     if responsable_rows:
         for r in responsable_rows:
-            resp_map[r["gasto"]] = r["responsable"]
+            key = r["gasto"].strip()
+            if key not in resp_set:
+                resp_set[key] = set()
+            if r["responsable"] == "Ambos":
+                resp_set[key].update(["Marco", "Chiara"])
+            else:
+                resp_set[key].add(r["responsable"])
 
     gf_df = pl.DataFrame(gastos_fijos_rows).select(["id", "gasto"])
     pf_df = pl.DataFrame(pagos_fijos_rows)
@@ -180,9 +187,9 @@ def estado_pagos_mes(
         row_z = []
         row_text = []
         for g in gastos_names:
-            resp = resp_map.get(g)
-            # Not responsible: responsable is set to the other person (not Ambos, not this persona)
-            if resp and resp != "Ambos" and resp != persona:
+            responsible = resp_set.get(g)
+            # N/A if we know who's responsible and this persona is not in that set
+            if responsible and persona not in responsible:
                 row_z.append(None)
                 row_text.append("N/A")
             elif paid_map.get(g, False):
@@ -228,11 +235,17 @@ def estado_ahorros_mes(
     if not pagos_ahorros_rows or not ahorros_rows:
         return _empty_fig("Sin datos de ahorros para este período")
 
-    # Build responsable map from responsable_gastos: ahorro_name → responsable
-    resp_map: dict[str, str] = {}
+    # Build a set of responsible personas per ahorro (same logic as estado_pagos_mes).
+    resp_set: dict[str, set] = {}
     if responsable_rows:
         for r in responsable_rows:
-            resp_map[r["gasto"]] = r["responsable"]
+            key = r["gasto"].strip()
+            if key not in resp_set:
+                resp_set[key] = set()
+            if r["responsable"] == "Ambos":
+                resp_set[key].update(["Marco", "Chiara"])
+            else:
+                resp_set[key].add(r["responsable"])
 
     ah_df = pl.DataFrame(ahorros_rows).select(["id", "ahorro"])
     pa_df = pl.DataFrame(pagos_ahorros_rows)
@@ -250,8 +263,8 @@ def estado_ahorros_mes(
         row_z = []
         row_text = []
         for a in ahorro_names:
-            resp = resp_map.get(a)
-            if resp and resp != "Ambos" and resp != persona:
+            responsible = resp_set.get(a)
+            if responsible and persona not in responsible:
                 row_z.append(None)
                 row_text.append("N/A")
             elif paid_map.get(a, False):
