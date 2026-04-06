@@ -72,18 +72,18 @@ def gastos_en_tiempo(rows: list[dict], date_from=None, date_to=None) -> go.Figur
         return _empty_fig()
 
     df = df.with_columns(
-        pl.col("fecha").dt.strftime("%Y-%m").alias("year_month")
+        pl.col("fecha").dt.strftime("%Y-%m-%d").alias("day")
     )
-    summary = df.group_by("year_month").agg(
+    summary = df.group_by("day").agg(
         pl.col("monto").sum().alias("total")
-    ).sort("year_month")
+    ).sort("day")
 
     fig = go.Figure(data=[
-        go.Scatter(x=summary["year_month"], y=summary["total"], mode="lines+markers", line_color="darkblue")
+        go.Scatter(x=summary["day"], y=summary["total"], mode="lines+markers", line_color="darkblue")
     ])
     fig.update_layout(
         title="Gastos en el Tiempo",
-        xaxis_title="Período",
+        xaxis_title="Fecha",
         yaxis_title="Monto Total",
         hovermode="x"
     )
