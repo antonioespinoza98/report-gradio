@@ -72,7 +72,7 @@ def build_tab():
 
         if not pf_df.is_empty() and not gf_df.is_empty():
             pf_df = pf_df.join(gf_df, left_on="gasto_fijo_id", right_on="id")
-            pf_df = pf_df.select(["gasto", "persona", "pagado"])
+            pf_df = pf_df.select(["gasto", "persona", "pagado"]).rename({"gasto": "Gasto"})
 
         return _pivot(pf_df, "Gasto") if not pf_df.is_empty() else \
             pl.DataFrame(schema={"Gasto": pl.Utf8, "Marco": pl.Boolean, "Chiara": pl.Boolean})
@@ -93,7 +93,7 @@ def build_tab():
 
         if not pa_df.is_empty() and not ah_df.is_empty():
             pa_df = pa_df.join(ah_df, left_on="ahorro_id", right_on="id")
-            pa_df = pa_df.select(["ahorro", "persona", "pagado"])
+            pa_df = pa_df.select(["ahorro", "persona", "pagado"]).rename({"ahorro": "Ahorro"})
 
         return _pivot(pa_df, "Ahorro") if not pa_df.is_empty() else \
             pl.DataFrame(schema={"Ahorro": pl.Utf8, "Marco": pl.Boolean, "Chiara": pl.Boolean})
