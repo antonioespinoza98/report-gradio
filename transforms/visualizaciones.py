@@ -138,7 +138,8 @@ def tipo_gasto_por_categoria(
         return _empty_fig()
 
     summary = (
-        df.group_by(["categoria", "persona"])
+        df.with_columns(pl.col("monto").cast(pl.Float64))
+        .group_by(["categoria", "persona"])
         .agg(pl.col("monto").sum().alias("total"))
         .sort(["categoria", "persona"])
     )
