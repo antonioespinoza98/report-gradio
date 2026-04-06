@@ -6,7 +6,7 @@ def get_all():
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT id, persona, descripcion, categoria, monto, fecha, created_at
+                SELECT id, persona, descripcion, categoria, monto, fecha, tipo_de_gasto, created_at
                 FROM gastos_variables
                 ORDER BY fecha DESC, created_at DESC
             """)
@@ -18,7 +18,7 @@ def get_last_n(n: int):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT id, persona, descripcion, categoria, monto, fecha, created_at
+                SELECT id, persona, descripcion, categoria, monto, fecha, tipo_de_gasto, created_at
                 FROM gastos_variables
                 ORDER BY fecha DESC, created_at DESC
                 LIMIT %s
@@ -28,7 +28,7 @@ def get_last_n(n: int):
 
 def get_filtered(persona=None, categoria=None, date_from=None, date_to=None):
     """Get filtered variable expenses."""
-    query = "SELECT id, persona, descripcion, categoria, monto, fecha, created_at FROM gastos_variables WHERE 1=1"
+    query = "SELECT id, persona, descripcion, categoria, monto, fecha, tipo_de_gasto, created_at FROM gastos_variables WHERE 1=1"
     params = []
 
     if persona:
@@ -57,15 +57,16 @@ def insert(data: dict):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO gastos_variables (persona, descripcion, categoria, monto, fecha)
-                VALUES (%s, %s, %s, %s, %s)
-                RETURNING id, persona, descripcion, categoria, monto, fecha, created_at
+                INSERT INTO gastos_variables (persona, descripcion, categoria, monto, fecha, tipo_de_gasto)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id, persona, descripcion, categoria, monto, fecha, tipo_de_gasto, created_at
             """, (
                 data["persona"],
                 data["descripcion"],
                 data["categoria"],
                 float(data["monto"]),
-                data["fecha"]
+                data["fecha"],
+                data.get("tipo_de_gasto", "Gasto Común")
             ))
             cols = [desc[0] for desc in cur.description]
             result = cur.fetchone()
@@ -78,15 +79,16 @@ def update(row_id: int, data: dict):
         with conn.cursor() as cur:
             cur.execute("""
                 UPDATE gastos_variables
-                SET persona = %s, descripcion = %s, categoria = %s, monto = %s, fecha = %s
+                SET persona = %s, descripcion = %s, categoria = %s, monto = %s, fecha = %s, tipo_de_gasto = %s
                 WHERE id = %s
-                RETURNING id, persona, descripcion, categoria, monto, fecha, created_at
+                RETURNING id, persona, descripcion, categoria, monto, fecha, tipo_de_gasto, created_at
             """, (
                 data["persona"],
                 data["descripcion"],
                 data["categoria"],
                 float(data["monto"]),
                 data["fecha"],
+                data.get("tipo_de_gasto", "Gasto Común"),
                 row_id
             ))
             cols = [desc[0] for desc in cur.description]

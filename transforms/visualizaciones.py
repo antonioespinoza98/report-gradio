@@ -117,6 +117,72 @@ def comparativa_personas(rows: list[dict], date_from=None, date_to=None) -> go.F
     return fig
 
 
+def gastos_fijos_por_gasto(gastos_fijos_rows: list[dict]) -> go.Figure:
+    """Horizontal bar chart of fixed expense amounts by name."""
+    if not gastos_fijos_rows:
+        return _empty_fig("Sin gastos fijos registrados")
+
+    df = pl.DataFrame(gastos_fijos_rows).sort("total", descending=True)
+
+    fig = go.Figure(data=[
+        go.Bar(
+            y=df["gasto"].to_list(),
+            x=df["total"].to_list(),
+            orientation="h",
+            marker_color="coral",
+            text=[f"${v:,.0f}" for v in df["total"].to_list()],
+            textposition="outside",
+        )
+    ])
+    fig.update_layout(
+        title="Gastos Fijos por Concepto",
+        xaxis_title="Monto",
+        yaxis_title="",
+        hovermode="y unified",
+        margin=dict(l=150),
+    )
+    return fig
+
+
+def estado_pagos_mes(pagos_fijos_rows: list[dict], gastos_fijos_rows: list[dict]) -> go.Figure:
+    """Heatmap showing payment status (paid/unpaid) per expense per person."""
+    if not pagos_fijos_rows or not gastos_fijos_rows:
+        return _empty_fig("Sin datos de pagos para este período")
+
+    gf_df = pl.DataFrame(gastos_fijos_rows).select(["id", "gasto"])
+    pf_df = pl.DataFrame(pagos_fijos_rows)
+    merged = pf_df.join(gf_df, left_on="gasto_fijo_id", right_on="id")
+
+    gastos_names = sorted(merged["gasto"].unique().to_list())
+    personas = sorted(merged["persona"].unique().to_list())
+
+    z = []
+    text = []
+    for persona in personas:
+        persona_df = merged.filter(pl.col("persona") == persona)
+        paid_map = {r["gasto"]: r["pagado"] for r in persona_df.to_dicts()}
+        z.append([1 if paid_map.get(g, False) else 0 for g in gastos_names])
+        text.append(["Pagado" if paid_map.get(g, False) else "Pendiente" for g in gastos_names])
+
+    fig = go.Figure(data=go.Heatmap(
+        z=z,
+        x=gastos_names,
+        y=personas,
+        colorscale=[[0, "#e74c3c"], [1, "#2ecc71"]],
+        showscale=False,
+        text=text,
+        texttemplate="%{text}",
+        hovertemplate="%{y} — %{x}: %{text}<extra></extra>",
+    ))
+    fig.update_layout(
+        title="Estado de Pagos del Mes",
+        xaxis_title="",
+        yaxis_title="",
+        xaxis=dict(side="bottom"),
+    )
+    return fig
+
+
 def fijos_vs_variables(gastos_fijos_rows: list[dict], gastos_var_rows: list[dict]) -> go.Figure:
     """Stacked bar chart: fixed vs variable expenses by month."""
     if not gastos_var_rows:

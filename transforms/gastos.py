@@ -19,6 +19,7 @@ def to_display_df(rows: list[dict]) -> pl.DataFrame:
             "Persona": [],
             "Descripción": [],
             "Categoría": [],
+            "Tipo": [],
             "Monto": [],
             "Fecha": [],
         })
@@ -29,6 +30,7 @@ def to_display_df(rows: list[dict]) -> pl.DataFrame:
         pl.col("persona").alias("Persona"),
         pl.col("descripcion").alias("Descripción"),
         pl.col("categoria").alias("Categoría"),
+        pl.col("tipo_de_gasto").alias("Tipo"),
         pl.col("monto").alias("Monto"),
         pl.col("fecha").alias("Fecha"),
     ])
@@ -43,6 +45,7 @@ def filter_df(rows: list[dict], persona=None, categoria=None, date_from=None, da
             "Persona": [],
             "Descripción": [],
             "Categoría": [],
+            "Tipo": [],
             "Monto": [],
             "Fecha": [],
         })
@@ -63,6 +66,7 @@ def filter_df(rows: list[dict], persona=None, categoria=None, date_from=None, da
         pl.col("persona").alias("Persona"),
         pl.col("descripcion").alias("Descripción"),
         pl.col("categoria").alias("Categoría"),
+        pl.col("tipo_de_gasto").alias("Tipo"),
         pl.col("monto").alias("Monto"),
         pl.col("fecha").alias("Fecha"),
     ])

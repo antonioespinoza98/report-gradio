@@ -2,14 +2,22 @@
 -- GASTOS VARIABLES: Tab 1 entries
 -- ============================================================
 CREATE TABLE IF NOT EXISTS gastos_variables (
-    id          SERIAL PRIMARY KEY,
-    persona     VARCHAR(50)     NOT NULL CHECK (persona IN ('Marco', 'Chiara')),
-    descripcion TEXT            NOT NULL,
-    categoria   VARCHAR(50)     NOT NULL,
-    monto       NUMERIC(12, 2)  NOT NULL CHECK (monto > 0),
-    fecha       DATE            NOT NULL,
-    created_at  TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+    id              SERIAL PRIMARY KEY,
+    persona         VARCHAR(50)     NOT NULL CHECK (persona IN ('Marco', 'Chiara')),
+    descripcion     TEXT            NOT NULL,
+    categoria       VARCHAR(50)     NOT NULL,
+    monto           NUMERIC(12, 2)  NOT NULL CHECK (monto > 0),
+    fecha           DATE            NOT NULL,
+    tipo_de_gasto   VARCHAR(50)     NOT NULL DEFAULT 'Gasto Común',
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW()
 );
+
+-- Migration: add tipo_de_gasto to existing deployments
+ALTER TABLE gastos_variables ADD COLUMN IF NOT EXISTS tipo_de_gasto VARCHAR(50) NOT NULL DEFAULT 'Gasto Común';
+DO $$ BEGIN
+    ALTER TABLE gastos_variables ADD CONSTRAINT chk_tipo_de_gasto CHECK (tipo_de_gasto IN ('Gasto Común', 'Gasto Personal'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_gastos_variables_persona  ON gastos_variables (persona);
 CREATE INDEX IF NOT EXISTS idx_gastos_variables_fecha    ON gastos_variables (fecha);

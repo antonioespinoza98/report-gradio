@@ -1,17 +1,20 @@
 import gradio as gr
 from datetime import datetime, timedelta
-from models import gastos, gastos_fijos
+from models import gastos, gastos_fijos, pagos_fijos
 from transforms import visualizaciones
 from utils.constants import PERSONAS, CATEGORIAS
 
 def build_tab():
-    """Build the 'Visualizaciones' tab with 4 chart types."""
+    """Build the 'Visualizaciones' tab with 6 chart types."""
 
     gr.Markdown("### Análisis de Gastos")
 
-    # Shared filters
+    current_month = datetime.now().month
+    current_year = datetime.now().year
+
+    # Filters for variable expense charts
     with gr.Group():
-        gr.Markdown("#### Filtros")
+        gr.Markdown("#### Filtros — Gastos Variables")
         with gr.Row():
             persona_filter = gr.Dropdown(
                 choices=PERSONAS + ["Ambos"],
@@ -38,60 +41,72 @@ def build_tab():
                 interactive=True
             )
 
-        refresh_button = gr.Button("🔄 Actualizar gráficas", variant="primary")
+    # Filters for fixed expense charts
+    with gr.Group():
+        gr.Markdown("#### Filtros — Gastos Fijos")
+        with gr.Row():
+            mes_fijos = gr.Dropdown(
+                choices=[
+                    ("Enero", 1), ("Febrero", 2), ("Marzo", 3),
+                    ("Abril", 4), ("Mayo", 5), ("Junio", 6),
+                    ("Julio", 7), ("Agosto", 8), ("Septiembre", 9),
+                    ("Octubre", 10), ("Noviembre", 11), ("Diciembre", 12)
+                ],
+                value=current_month,
+                label="Mes (estado de pagos)",
+                interactive=True
+            )
+            anio_fijos = gr.Number(
+                value=current_year,
+                label="Año (estado de pagos)",
+                precision=0,
+                interactive=True
+            )
 
-    def load_charts(persona, categoria, date_from, date_to):
+    refresh_button = gr.Button("🔄 Actualizar gráficas", variant="primary")
+
+    def load_charts(persona, categoria, date_from, date_to, mes, anio):
         """Load all charts with current filters."""
-        # Convert None strings to actual None
         categoria = categoria if categoria else None
+        mes = int(mes) if isinstance(mes, float) else mes
+        anio = int(anio) if isinstance(anio, float) else anio
 
-        # Fetch all gastos for this period
         gast_rows = gastos.get_filtered(
-            persona=None,  # Fetch all, filter in transforms
+            persona=None,
             categoria=None,
             date_from=date_from,
             date_to=date_to
         )
-
-        # Chart 1: Gastos por categoría
-        fig1 = visualizaciones.gastos_por_categoria(
-            gast_rows,
-            persona_filter=persona,
-            date_from=date_from,
-            date_to=date_to
-        )
-
-        # Chart 2: Gastos en el tiempo
-        fig2 = visualizaciones.gastos_en_tiempo(
-            gast_rows,
-            date_from=date_from,
-            date_to=date_to
-        )
-
-        # Chart 3: Comparativa personas
-        fig3 = visualizaciones.comparativa_personas(
-            gast_rows,
-            date_from=date_from,
-            date_to=date_to
-        )
-
-        # Chart 4: Fijos vs Variables
         gf_rows = gastos_fijos.get_all()
+
+        fig1 = visualizaciones.gastos_por_categoria(gast_rows, persona_filter=persona, date_from=date_from, date_to=date_to)
+        fig2 = visualizaciones.gastos_en_tiempo(gast_rows, date_from=date_from, date_to=date_to)
+        fig3 = visualizaciones.comparativa_personas(gast_rows, date_from=date_from, date_to=date_to)
         fig4 = visualizaciones.fijos_vs_variables(gf_rows, gast_rows)
+        fig5 = visualizaciones.gastos_fijos_por_gasto(gf_rows)
 
-        return fig1, fig2, fig3, fig4
+        # Seed + fetch pagos for the selected month
+        try:
+            pagos_fijos.get_or_create_for_month(mes, anio)
+            pf_rows = pagos_fijos.get_all()
+            pf_rows = [r for r in pf_rows if r["mes"] == mes and r["anio"] == anio]
+        except Exception:
+            pf_rows = []
+        fig6 = visualizaciones.estado_pagos_mes(pf_rows, gf_rows)
 
-    # Load initial charts
+        return fig1, fig2, fig3, fig4, fig5, fig6
+
     init_date_from = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
     init_date_to = datetime.now().strftime("%Y-%m-%d")
 
     try:
-        fig1, fig2, fig3, fig4 = load_charts("Ambos", None, init_date_from, init_date_to)
+        fig1, fig2, fig3, fig4, fig5, fig6 = load_charts(
+            "Ambos", None, init_date_from, init_date_to, current_month, current_year
+        )
     except Exception:
         import plotly.graph_objects as go
-        fig1 = fig2 = fig3 = fig4 = go.Figure()
+        fig1 = fig2 = fig3 = fig4 = fig5 = fig6 = go.Figure()
 
-    # Charts
     with gr.Row():
         plot1 = gr.Plot(value=fig1, label="Gastos por Categoría")
         plot2 = gr.Plot(value=fig2, label="Gastos en el Tiempo")
@@ -100,16 +115,16 @@ def build_tab():
         plot3 = gr.Plot(value=fig3, label="Comparativa Marco vs Chiara")
         plot4 = gr.Plot(value=fig4, label="Gastos Fijos vs Variables")
 
-    # Wire refresh button
-    refresh_button.click(
-        fn=load_charts,
-        inputs=[persona_filter, categoria_filter, date_from_input, date_to_input],
-        outputs=[plot1, plot2, plot3, plot4]
-    )
+    with gr.Row():
+        plot5 = gr.Plot(value=fig5, label="Gastos Fijos por Concepto")
+        plot6 = gr.Plot(value=fig6, label="Estado de Pagos del Mes")
 
-    # Also update on filter change
-    persona_filter.change(
-        fn=load_charts,
-        inputs=[persona_filter, categoria_filter, date_from_input, date_to_input],
-        outputs=[plot1, plot2, plot3, plot4]
-    )
+    all_inputs = [persona_filter, categoria_filter, date_from_input, date_to_input, mes_fijos, anio_fijos]
+    all_outputs = [plot1, plot2, plot3, plot4, plot5, plot6]
+
+    refresh_button.click(fn=load_charts, inputs=all_inputs, outputs=all_outputs)
+    persona_filter.change(fn=load_charts, inputs=all_inputs, outputs=all_outputs)
+    mes_fijos.change(fn=load_charts, inputs=all_inputs, outputs=all_outputs)
+    anio_fijos.change(fn=load_charts, inputs=all_inputs, outputs=all_outputs)
+
+    return load_charts, all_inputs, all_outputs

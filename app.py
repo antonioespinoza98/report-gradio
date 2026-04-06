@@ -46,13 +46,15 @@ def build_app():
             with gr.Tab(label="2️⃣ Tablas Predeterminadas", id="tab_tablas"):
                 tab_tablas.build_tab()
 
-            # Tab 3: Resumen del Mes
-            with gr.Tab(label="3️⃣ Resumen del Mes", id="tab_resumen_mes"):
-                tab_resumen_mes.build_tab()
+            # Tab 3: Resumen del Mes — auto-refresh on select so new gastos_fijos appear
+            with gr.Tab(label="3️⃣ Resumen del Mes", id="tab_resumen_mes") as tab3:
+                resumen_fn, mes_i, anio_i, pmt_table = tab_resumen_mes.build_tab()
+            tab3.select(fn=resumen_fn, inputs=[mes_i, anio_i], outputs=[pmt_table])
 
-            # Tab 4: Visualizaciones
-            with gr.Tab(label="4️⃣ Visualizaciones", id="tab_visualizaciones"):
-                tab_visualizaciones.build_tab()
+            # Tab 4: Visualizaciones — auto-refresh on select
+            with gr.Tab(label="4️⃣ Visualizaciones", id="tab_visualizaciones") as tab4:
+                viz_fn, viz_inputs, viz_outputs = tab_visualizaciones.build_tab()
+            tab4.select(fn=viz_fn, inputs=viz_inputs, outputs=viz_outputs)
 
     return demo
 

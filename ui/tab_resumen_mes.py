@@ -134,3 +134,5 @@ def build_tab():
     mes_input.change(fn=on_month_change, inputs=[mes_input, anio_input], outputs=[payment_table])
     anio_input.change(fn=on_month_change, inputs=[mes_input, anio_input], outputs=[payment_table])
     save_button.click(fn=on_payment_save, inputs=[payment_table, mes_input, anio_input], outputs=[payment_table])
+
+    return load_month_data, mes_input, anio_input, payment_table

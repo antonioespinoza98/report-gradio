@@ -13,3 +13,5 @@ CATEGORIAS = [
 ]
 
 RESPONSABLE_OPTIONS = ["Marco", "Chiara", "Ambos"]
+
+TIPO_GASTO_OPTIONS = ["Gasto Común", "Gasto Personal"]

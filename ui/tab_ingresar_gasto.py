@@ -2,7 +2,7 @@ import gradio as gr
 from datetime import datetime
 from models import gastos
 from transforms import gastos as gastos_transform
-from utils.constants import PERSONAS, CATEGORIAS
+from utils.constants import PERSONAS, CATEGORIAS, TIPO_GASTO_OPTIONS
 
 def build_tab():
     """Build the 'Ingresar Gasto' tab UI."""
@@ -21,6 +21,11 @@ def build_tab():
                 label="Categoría",
                 value=CATEGORIAS[0]
             )
+            tipo_input = gr.Dropdown(
+                choices=TIPO_GASTO_OPTIONS,
+                label="Tipo de Gasto",
+                value=TIPO_GASTO_OPTIONS[0]
+            )
 
         with gr.Row():
             descripcion_input = gr.Textbox(
@@ -38,13 +43,14 @@ def build_tab():
             value=datetime.now().strftime("%Y-%m-%d")
         )
 
-        def on_save_click(persona, descripcion, categoria, monto, fecha):
+        def on_save_click(persona, descripcion, categoria, tipo, monto, fecha):
             """Handle save button click."""
             try:
                 gastos.insert({
                     "persona": persona,
                     "descripcion": descripcion,
                     "categoria": categoria,
+                    "tipo_de_gasto": tipo,
                     "monto": monto,
                     "fecha": fecha
                 })
@@ -82,6 +88,6 @@ def build_tab():
     # Wire save button
     save_button.click(
         fn=on_save_click,
-        inputs=[persona_input, descripcion_input, categoria_input, monto_input, fecha_input],
+        inputs=[persona_input, descripcion_input, categoria_input, tipo_input, monto_input, fecha_input],
         outputs=[descripcion_input, monto_input, fecha_input, gastos_table]
     )
