@@ -139,12 +139,45 @@ def build_tab():
     with gr.Row():
         plot7 = gr.Plot(value=fig7, label="Estado de Depósitos de Ahorro del Mes")
 
+    # ── Tipo de Gasto por Categoría ─────────────────────────────────────────────
+    gr.Markdown("---\n#### Tipo de Gasto por Categoría")
+    with gr.Row():
+        tipo_persona_filter = gr.Dropdown(
+            choices=PERSONAS + ["Ambos"],
+            value="Ambos",
+            label="Persona",
+            interactive=True
+        )
+
+    def load_tipo_chart(persona, date_from, date_to):
+        gast_rows = gastos.get_filtered(persona=None, categoria=None, date_from=date_from, date_to=date_to)
+        return visualizaciones.tipo_gasto_por_categoria(gast_rows, persona_filter=persona, date_from=date_from, date_to=date_to)
+
+    try:
+        fig8 = load_tipo_chart("Ambos", init_date_from, init_date_to)
+    except Exception:
+        import plotly.graph_objects as go
+        fig8 = go.Figure()
+
+    plot8 = gr.Plot(value=fig8, label="Tipo de Gasto por Categoría")
+
+    tipo_inputs = [tipo_persona_filter, date_from_input, date_to_input]
+
+    # ── Wire events ─────────────────────────────────────────────────────────────
+
     all_inputs = [persona_filter, categoria_filter, date_from_input, date_to_input, mes_fijos, anio_fijos]
     all_outputs = [plot1, plot2, plot3, plot4, plot5, plot6, plot7]
 
     refresh_button.click(fn=load_charts, inputs=all_inputs, outputs=all_outputs)
+    refresh_button.click(fn=load_tipo_chart, inputs=tipo_inputs, outputs=[plot8])
     persona_filter.change(fn=load_charts, inputs=all_inputs, outputs=all_outputs)
     mes_fijos.change(fn=load_charts, inputs=all_inputs, outputs=all_outputs)
     anio_fijos.change(fn=load_charts, inputs=all_inputs, outputs=all_outputs)
+    tipo_persona_filter.change(fn=load_tipo_chart, inputs=tipo_inputs, outputs=[plot8])
 
-    return load_charts, all_inputs, all_outputs
+    def load_all(persona, categoria, date_from, date_to, mes, anio):
+        charts = load_charts(persona, categoria, date_from, date_to, mes, anio)
+        tipo = load_tipo_chart("Ambos", date_from, date_to)
+        return (*charts, tipo)
+
+    return load_all, all_inputs, [*all_outputs, plot8]

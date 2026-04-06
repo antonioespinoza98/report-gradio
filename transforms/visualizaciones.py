@@ -117,6 +117,62 @@ def comparativa_personas(rows: list[dict], date_from=None, date_to=None) -> go.F
     return fig
 
 
+def tipo_gasto_por_categoria(
+    rows: list[dict],
+    persona_filter=None,
+    date_from=None,
+    date_to=None,
+) -> go.Figure:
+    """Grouped bar chart: amount per category split by tipo_de_gasto, filtered by persona."""
+    if not rows:
+        return _empty_fig()
+
+    df = pl.DataFrame(rows)
+
+    if persona_filter and persona_filter != "Ambos":
+        df = df.filter(pl.col("persona") == persona_filter)
+
+    df = _filter_dates(df, date_from, date_to)
+
+    if df.is_empty():
+        return _empty_fig()
+
+    summary = (
+        df.group_by(["categoria", "tipo_de_gasto"])
+        .agg(pl.col("monto").sum().alias("total"))
+        .sort(["categoria", "tipo_de_gasto"])
+    )
+
+    tipos = sorted(summary["tipo_de_gasto"].unique().to_list())
+    categorias = sorted(summary["categoria"].unique().to_list())
+    colors = {"Gasto Común": "steelblue", "Gasto Personal": "coral"}
+
+    fig = go.Figure()
+    for tipo in tipos:
+        tipo_df = summary.filter(pl.col("tipo_de_gasto") == tipo)
+        tipo_map = dict(zip(tipo_df["categoria"].to_list(), tipo_df["total"].to_list()))
+        fig.add_trace(go.Bar(
+            name=tipo,
+            x=categorias,
+            y=[tipo_map.get(c, 0) for c in categorias],
+            marker_color=colors.get(tipo, "grey"),
+        ))
+
+    title = "Tipo de Gasto por Categoría"
+    if persona_filter and persona_filter != "Ambos":
+        title += f" — {persona_filter}"
+
+    fig.update_layout(
+        title=title,
+        xaxis_title="Categoría",
+        yaxis_title="Monto",
+        barmode="group",
+        hovermode="x unified",
+        legend_title="Tipo",
+    )
+    return fig
+
+
 def gastos_fijos_por_gasto(gastos_fijos_rows: list[dict]) -> go.Figure:
     """Horizontal bar chart of fixed expense amounts by name."""
     if not gastos_fijos_rows:
