@@ -48,8 +48,8 @@ def build_app():
 
             # Tab 3: Resumen del Mes — auto-refresh on select so new gastos_fijos appear
             with gr.Tab(label="3️⃣ Resumen del Mes", id="tab_resumen_mes") as tab3:
-                resumen_fn, mes_i, anio_i, pmt_table = tab_resumen_mes.build_tab()
-            tab3.select(fn=resumen_fn, inputs=[mes_i, anio_i], outputs=[pmt_table])
+                resumen_fn, mes_i, anio_i, pmt_table, ahorros_tbl = tab_resumen_mes.build_tab()
+            tab3.select(fn=resumen_fn, inputs=[mes_i, anio_i], outputs=[pmt_table, ahorros_tbl])
 
             # Tab 4: Visualizaciones — auto-refresh on select
             with gr.Tab(label="4️⃣ Visualizaciones", id="tab_visualizaciones") as tab4:
