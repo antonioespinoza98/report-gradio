@@ -6,8 +6,8 @@ CATEGORIAS = [
     "Transporte",
     "Entretenimiento",
     "Salud",
-    "Farmacia",
-    "Servicios",
+    "Deporte",
+    "Subscripciones",
     "Ropa",
     "Ahorro Personal",
     "Otros"
