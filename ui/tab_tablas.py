@@ -240,10 +240,11 @@ def build_tab():
                 ing_rows = ingresos.get_all()
                 gast_rows = gastos.get_all()
                 resp_rows = responsable_gastos.get_all()
-                return resumen_transform.calc_resumen(ing_rows, gast_rows, resp_rows)
+                fijos_rows = gastos_fijos.get_all()
+                return resumen_transform.calc_resumen(ing_rows, gast_rows, resp_rows, fijos_rows)
 
             resumen_table = gr.Dataframe(
-                value=_safe_load(load_resumen, {"Persona": [], "Ingreso": [], "Total Gasto": [], "Sobrante": []}),
+                value=_safe_load(load_resumen, {"Persona": [], "Ingreso": [], "Gasto Variable": [], "Gasto Fijo": [], "Sobrante": []}),
                 interactive=False,
                 label="Resumen"
             )

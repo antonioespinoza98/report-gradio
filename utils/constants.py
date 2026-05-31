@@ -6,10 +6,10 @@ CATEGORIAS = [
     "Transporte",
     "Entretenimiento",
     "Salud",
+    "Viajecitos",
     "Deporte",
     "Subscripciones",
     "Ropa",
-    "Ahorro Personal",
     "Otros"
 ]
 
