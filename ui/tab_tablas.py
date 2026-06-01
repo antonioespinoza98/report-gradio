@@ -1,5 +1,6 @@
 import gradio as gr
 import polars as pl
+from datetime import date
 from models import gastos_fijos, ingresos, ahorros, responsable_gastos, gastos
 from transforms import resumen as resumen_transform
 from utils.constants import PERSONAS, RESPONSABLE_OPTIONS
@@ -236,15 +237,44 @@ def build_tab():
         with gr.Tab(label="Resumen"):
             gr.Markdown("### Resumen de Ingresos y Gastos")
 
-            def load_resumen():
+            def _month_choices():
+                today = date.today()
+                choices = []
+                for i in range(12):
+                    month = today.month - i
+                    year = today.year
+                    while month <= 0:
+                        month += 12
+                        year -= 1
+                    choices.append(f"{year}-{month:02d}")
+                return choices
+
+            resumen_mes = gr.Dropdown(
+                choices=_month_choices(),
+                value=_month_choices()[0],
+                label="Mes",
+                interactive=True,
+            )
+
+            def load_resumen(mes: str):
+                year, month = int(mes.split("-")[0]), int(mes.split("-")[1])
+                import calendar
+                last_day = calendar.monthrange(year, month)[1]
+                date_from = date(year, month, 1)
+                date_to = date(year, month, last_day)
+
                 ing_rows = ingresos.get_all()
-                gast_rows = gastos.get_all()
+                gast_rows = gastos.get_filtered(date_from=date_from, date_to=date_to)
                 resp_rows = responsable_gastos.get_all()
                 fijos_rows = gastos_fijos.get_all()
                 return resumen_transform.calc_resumen(ing_rows, gast_rows, resp_rows, fijos_rows)
 
+            empty_schema = {"Persona": [], "Ingreso": [], "Gasto Variable": [], "Gasto Fijo": [], "Sobrante": []}
+
             resumen_table = gr.Dataframe(
-                value=_safe_load(load_resumen, {"Persona": [], "Ingreso": [], "Gasto Variable": [], "Gasto Fijo": [], "Sobrante": []}),
+                value=_safe_load(lambda: load_resumen(_month_choices()[0]), empty_schema),
                 interactive=False,
                 label="Resumen"
             )
+
+            resumen_mes.change(fn=load_resumen, inputs=[resumen_mes], outputs=[resumen_table])
