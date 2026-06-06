@@ -109,7 +109,7 @@ def comparativa_personas(rows: list[dict], date_from=None, date_to=None) -> go.F
         go.Bar(x=summary["persona"], y=summary["total"], marker_color=["#1f77b4", "#ff7f0e"])
     ])
     fig.update_layout(
-        title="Comparativa de Gastos",
+        title="Comparativa de Gastos Variables",
         xaxis_title="Persona",
         yaxis_title="Monto Total",
         hovermode="x unified"
