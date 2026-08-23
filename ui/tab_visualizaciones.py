@@ -2,10 +2,10 @@ import gradio as gr
 from datetime import datetime, timedelta
 from models import gastos, gastos_fijos, pagos_fijos, pagos_ahorros, responsable_gastos, ahorros
 from transforms import visualizaciones
-from utils.constants import PERSONAS, TIPO_GASTO_OPTIONS
+from utils.constants import PERSONAS
 
 def build_tab():
-    """Build the 'Visualizaciones' tab with 6 chart types."""
+    """Build the 'Visualizaciones' tab with 4 chart types."""
 
     gr.Markdown("### Análisis de Gastos")
 
@@ -74,7 +74,6 @@ def build_tab():
 
         fig2 = visualizaciones.gastos_en_tiempo(gast_rows, date_from=date_from, date_to=date_to)
         fig3 = visualizaciones.comparativa_personas(gast_rows, date_from=date_from, date_to=date_to)
-        fig4 = visualizaciones.fijos_vs_variables(gf_rows, gast_rows)
 
         # Seed + fetch pagos for the selected month
         try:
@@ -102,69 +101,38 @@ def build_tab():
             ah_rows = []
         fig7 = visualizaciones.estado_ahorros_mes(pa_rows, ah_rows, resp_rows)
 
-        return fig2, fig3, fig4, fig6, fig7
+        return fig2, fig3, fig6, fig7
 
     init_date_from = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
     init_date_to = datetime.now().strftime("%Y-%m-%d")
 
     try:
-        fig2, fig3, fig4, fig6, fig7 = load_charts(
+        fig2, fig3, fig6, fig7 = load_charts(
             "Ambos", init_date_from, init_date_to, current_month, current_year
         )
     except Exception:
         import plotly.graph_objects as go
-        fig2 = fig3 = fig4 = fig6 = fig7 = go.Figure()
+        fig2 = fig3 = fig6 = fig7 = go.Figure()
 
     with gr.Row():
         plot2 = gr.Plot(value=fig2, label="Gastos en el Tiempo")
-        plot3 = gr.Plot(value=fig3, label="Comparativa de Gastos Variables")
 
     with gr.Row():
-        plot4 = gr.Plot(value=fig4, label="Gastos Fijos vs Variables")
+        plot3 = gr.Plot(value=fig3, label="Comparativa de Gastos Variables")
 
+    # Los dos mapas de calor del mes comparten fila
     with gr.Row():
         plot6 = gr.Plot(value=fig6, label="Estado de Pagos del Mes")
         plot7 = gr.Plot(value=fig7, label="Estado de Depósitos de Ahorro del Mes")
 
-    # ── Tipo de Gasto por Categoría ─────────────────────────────────────────────
-    gr.Markdown("---\n#### Tipo de Gasto por Categoría")
-    with gr.Row():
-        tipo_filter = gr.Dropdown(
-            choices=TIPO_GASTO_OPTIONS,
-            value=TIPO_GASTO_OPTIONS[0],
-            label="Tipo de Gasto",
-            interactive=True
-        )
-
-    def load_tipo_chart(tipo, date_from, date_to):
-        gast_rows = gastos.get_filtered(persona=None, categoria=None, date_from=date_from, date_to=date_to)
-        return visualizaciones.tipo_gasto_por_categoria(gast_rows, tipo_filter=tipo, date_from=date_from, date_to=date_to)
-
-    try:
-        fig8 = load_tipo_chart(TIPO_GASTO_OPTIONS[0], init_date_from, init_date_to)
-    except Exception:
-        import plotly.graph_objects as go
-        fig8 = go.Figure()
-
-    plot8 = gr.Plot(value=fig8, label="Tipo de Gasto por Categoría")
-
-    tipo_inputs = [tipo_filter, date_from_input, date_to_input]
-
     # ── Wire events ─────────────────────────────────────────────────────────────
 
     all_inputs = [persona_filter, date_from_input, date_to_input, mes_fijos, anio_fijos]
-    all_outputs = [plot2, plot3, plot4, plot6, plot7]
+    all_outputs = [plot2, plot3, plot6, plot7]
 
     refresh_button.click(fn=load_charts, inputs=all_inputs, outputs=all_outputs)
-    refresh_button.click(fn=load_tipo_chart, inputs=tipo_inputs, outputs=[plot8])
     persona_filter.change(fn=load_charts, inputs=all_inputs, outputs=all_outputs)
     mes_fijos.change(fn=load_charts, inputs=all_inputs, outputs=all_outputs)
     anio_fijos.change(fn=load_charts, inputs=all_inputs, outputs=all_outputs)
-    tipo_filter.change(fn=load_tipo_chart, inputs=tipo_inputs, outputs=[plot8])
 
-    def load_all(persona, date_from, date_to, mes, anio):
-        charts = load_charts(persona, date_from, date_to, mes, anio)
-        tipo = load_tipo_chart("Ambos", date_from, date_to)
-        return (*charts, tipo)
-
-    return load_all, all_inputs, [*all_outputs, plot8]
+    return load_charts, all_inputs, all_outputs

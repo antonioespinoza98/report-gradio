@@ -8,7 +8,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 import gradio as gr
 from dotenv import load_dotenv
 from db.connection import init_pool, execute_sql_file
-from ui import tab_ingresar_gasto, tab_tablas, tab_resumen_mes, tab_visualizaciones, tab_viajes
+from ui import (tab_ingresar_gasto, tab_tablas, tab_resumen_mes, tab_visualizaciones,
+                tab_visualizaciones_categoria, tab_viajes)
 
 # Load environment variables
 load_dotenv()
@@ -58,10 +59,15 @@ def build_app():
                 viz_fn, viz_inputs, viz_outputs = tab_visualizaciones.build_tab()
             tab4.select(fn=viz_fn, inputs=viz_inputs, outputs=viz_outputs)
 
-            # Tab 5: Viajes — auto-refresh on select
-            with gr.Tab(label="5️⃣ Viajes", id="tab_viajes") as tab5:
+            # Tab 5: Visualizaciones por categoría — auto-refresh on select
+            with gr.Tab(label="5️⃣ Visualizaciones - por categoría", id="tab_visualizaciones_categoria") as tab5:
+                cat_fn, cat_inputs, cat_outputs = tab_visualizaciones_categoria.build_tab()
+            tab5.select(fn=cat_fn, inputs=cat_inputs, outputs=cat_outputs)
+
+            # Tab 6: Viajes — auto-refresh on select
+            with gr.Tab(label="6️⃣ Viajes", id="tab_viajes") as tab6:
                 viajes_fn, viajes_tbl = tab_viajes.build_tab()
-            tab5.select(fn=viajes_fn, inputs=[], outputs=[viajes_tbl])
+            tab6.select(fn=viajes_fn, inputs=[], outputs=[viajes_tbl])
 
     return demo
 
