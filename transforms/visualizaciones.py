@@ -1,6 +1,7 @@
 import polars as pl
 import plotly.graph_objects as go
 from datetime import date as date_type
+from utils.money import money, round_money
 
 def _parse_date(d):
     """Convert a string 'YYYY-MM-DD' or date object to a date object."""
@@ -42,7 +43,7 @@ def gastos_por_categoria(rows: list[dict], persona_filter=None, date_from=None, 
     df = _filter_dates(df, date_from, date_to)
 
     summary = df.group_by("categoria").agg(
-        pl.col("monto").sum().alias("total")
+        money(pl.col("monto").sum()).alias("total")
     ).sort("total", descending=True)
 
     if summary.is_empty():
@@ -75,7 +76,7 @@ def gastos_en_tiempo(rows: list[dict], date_from=None, date_to=None) -> go.Figur
         pl.col("fecha").dt.strftime("%Y-%m-%d").alias("day")
     )
     summary = df.group_by("day").agg(
-        pl.col("monto").sum().alias("total")
+        money(pl.col("monto").sum()).alias("total")
     ).sort("day")
 
     fig = go.Figure(data=[
@@ -99,7 +100,7 @@ def comparativa_personas(rows: list[dict], date_from=None, date_to=None) -> go.F
     df = _filter_dates(df, date_from, date_to)
 
     summary = df.group_by("persona").agg(
-        pl.col("monto").sum().alias("total")
+        money(pl.col("monto").sum()).alias("total")
     ).sort("persona")
 
     if summary.is_empty():
@@ -140,7 +141,7 @@ def tipo_gasto_por_categoria(
     summary = (
         df.with_columns(pl.col("monto").cast(pl.Float64))
         .group_by(["categoria", "persona"])
-        .agg(pl.col("monto").sum().alias("total"))
+        .agg(money(pl.col("monto").sum()).alias("total"))
         .sort(["categoria", "persona"])
     )
 
@@ -177,7 +178,7 @@ def gastos_fijos_por_gasto(gastos_fijos_rows: list[dict]) -> go.Figure:
     if not gastos_fijos_rows:
         return _empty_fig("Sin gastos fijos registrados")
 
-    df = pl.DataFrame(gastos_fijos_rows).sort("total", descending=True)
+    df = pl.DataFrame(gastos_fijos_rows).with_columns(money(pl.col("total"))).sort("total", descending=True)
 
     fig = go.Figure(data=[
         go.Bar(
@@ -362,10 +363,10 @@ def fijos_vs_variables(gastos_fijos_rows: list[dict], gastos_var_rows: list[dict
         pl.col("fecha").dt.strftime("%Y-%m").alias("year_month")
     )
     var_summary = df_var.group_by("year_month").agg(
-        pl.col("monto").sum().alias("variables")
+        money(pl.col("monto").sum()).alias("variables")
     ).sort("year_month")
 
-    total_fixed = pl.DataFrame(gastos_fijos_rows)["total"].sum() if gastos_fijos_rows else 0
+    total_fixed = round_money(pl.DataFrame(gastos_fijos_rows)["total"].sum()) if gastos_fijos_rows else 0
 
     var_summary = var_summary.with_columns(pl.lit(total_fixed).alias("fijos"))
 

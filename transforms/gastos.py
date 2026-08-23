@@ -1,5 +1,6 @@
 import polars as pl
 from datetime import date
+from utils.money import money
 
 def _parse_date(d):
     if d is None:
@@ -22,6 +23,7 @@ def to_display_df(rows: list[dict]) -> pl.DataFrame:
             "Tipo": [],
             "Monto": [],
             "Fecha": [],
+            "Viaje": [],
         })
 
     df = pl.DataFrame(rows)
@@ -31,8 +33,9 @@ def to_display_df(rows: list[dict]) -> pl.DataFrame:
         pl.col("descripcion").alias("Descripción"),
         pl.col("categoria").alias("Categoría"),
         pl.col("tipo_de_gasto").alias("Tipo"),
-        pl.col("monto").alias("Monto"),
+        money(pl.col("monto")).alias("Monto"),
         pl.col("fecha").alias("Fecha"),
+        pl.col("viaje_nombre").fill_null("").alias("Viaje"),
     ])
 
 def filter_df(rows: list[dict], persona=None, categoria=None, date_from=None, date_to=None) -> pl.DataFrame:
@@ -48,6 +51,7 @@ def filter_df(rows: list[dict], persona=None, categoria=None, date_from=None, da
             "Tipo": [],
             "Monto": [],
             "Fecha": [],
+            "Viaje": [],
         })
 
     if persona:
@@ -67,6 +71,7 @@ def filter_df(rows: list[dict], persona=None, categoria=None, date_from=None, da
         pl.col("descripcion").alias("Descripción"),
         pl.col("categoria").alias("Categoría"),
         pl.col("tipo_de_gasto").alias("Tipo"),
-        pl.col("monto").alias("Monto"),
+        money(pl.col("monto")).alias("Monto"),
         pl.col("fecha").alias("Fecha"),
+        pl.col("viaje_nombre").fill_null("").alias("Viaje"),
     ])
