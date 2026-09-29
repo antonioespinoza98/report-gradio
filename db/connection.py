@@ -3,6 +3,17 @@ import psycopg2
 from psycopg2 import pool
 from contextlib import contextmanager
 
+# psycopg2 maps NUMERIC to Decimal, which is not JSON-serializable. Gradio embeds
+# each component's default value in the API schema it builds for "/", so a Decimal
+# in any gr.Dataframe makes the whole page fail to render. Amounts here are money
+# with 2 decimals, so float represents them exactly enough.
+_DEC2FLOAT = psycopg2.extensions.new_type(
+    psycopg2.extensions.DECIMAL.values,
+    "DEC2FLOAT",
+    lambda value, curs: float(value) if value is not None else None,
+)
+psycopg2.extensions.register_type(_DEC2FLOAT)
+
 _pool = None
 
 def init_pool():

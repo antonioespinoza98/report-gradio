@@ -95,3 +95,29 @@ CREATE TABLE IF NOT EXISTS pagos_ahorros (
 );
 
 CREATE INDEX IF NOT EXISTS idx_pagos_ahorros_periodo ON pagos_ahorros (anio, mes);
+
+-- ============================================================
+-- VIAJES: etiqueta opcional de viaje para gastos_variables
+-- Un gasto puede marcarse como ocurrido durante un viaje sin
+-- cambiar su categoría. Independiente de `categoria`.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS viajes (
+    id              SERIAL PRIMARY KEY,
+    nombre          VARCHAR(200)    NOT NULL,
+    destino         VARCHAR(200),
+    fecha_inicio    DATE            NOT NULL,
+    fecha_fin       DATE            NOT NULL,
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    CHECK (fecha_fin >= fecha_inicio)
+);
+
+CREATE INDEX IF NOT EXISTS idx_viajes_fechas ON viajes (fecha_inicio, fecha_fin);
+
+-- Migration: add nullable viaje_id to existing deployments
+ALTER TABLE gastos_variables ADD COLUMN IF NOT EXISTS viaje_id INTEGER;
+DO $$ BEGIN
+    ALTER TABLE gastos_variables ADD CONSTRAINT gastos_variables_viaje_id_fkey FOREIGN KEY (viaje_id) REFERENCES viajes(id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_gastos_variables_viaje_id ON gastos_variables (viaje_id);

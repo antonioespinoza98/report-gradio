@@ -1,5 +1,6 @@
 import polars as pl
 from decimal import Decimal
+from utils.money import money
 
 def calc_resumen(
     ingresos_rows: list[dict],
@@ -58,8 +59,8 @@ def calc_resumen(
 
     return result.select([
         pl.col("persona").alias("Persona"),
-        pl.col("ingreso_total").alias("Ingreso"),
-        pl.col("gasto_variable").alias("Gasto Variable"),
-        pl.col("gasto_fijo").alias("Gasto Fijo"),
-        pl.col("sobrante").alias("Sobrante"),
+        money(pl.col("ingreso_total")).alias("Ingreso"),
+        money(pl.col("gasto_variable")).alias("Gasto Variable"),
+        money(pl.col("gasto_fijo")).alias("Gasto Fijo"),
+        money(pl.col("sobrante")).alias("Sobrante"),
     ])
