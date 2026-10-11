@@ -5,6 +5,7 @@ CATEGORIAS = [
     "Restaurante",
     "Transporte",
     "Entretenimiento",
+    "Alcohol, Tabaco & Weed",
     "Salud",
     "Viajecitos",
     "Deporte",
