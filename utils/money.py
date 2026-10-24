@@ -13,3 +13,16 @@ def money(expr: pl.Expr) -> pl.Expr:
     """
     rounded = expr.round(MONEY_DP)
     return pl.when(rounded == 0).then(pl.lit(0.0)).otherwise(rounded)
+
+
+def eur(valor) -> str:
+    """Formatea euros en español: 1.234,56 €."""
+    if valor is None:
+        return "—"
+    s = f"{float(valor):,.2f}"
+    return s.replace(",", "§").replace(".", ",").replace("§", ".") + " €"
+
+
+def pct(valor) -> str:
+    """Porcentaje con coma decimal: 12,3 %."""
+    return f"{float(valor):.1f}".replace(".", ",") + " %"

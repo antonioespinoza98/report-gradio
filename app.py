@@ -9,7 +9,8 @@ import gradio as gr
 from dotenv import load_dotenv
 from db.connection import init_pool, execute_sql_file
 from ui import (tab_ingresar_gasto, tab_tablas, tab_resumen_mes, tab_visualizaciones,
-                tab_visualizaciones_categoria, tab_metricas, tab_viajes)
+                tab_visualizaciones_categoria, tab_metricas, tab_viajes,
+                tab_viajes_analisis)
 
 # Load environment variables
 load_dotenv()
@@ -73,6 +74,11 @@ def build_app():
             with gr.Tab(label="7️⃣ Viajes", id="tab_viajes") as tab7:
                 viajes_fn, viajes_tbl = tab_viajes.build_tab()
             tab7.select(fn=viajes_fn, inputs=[], outputs=[viajes_tbl])
+
+            # Tab 8: Análisis de viajes — auto-refresh on select
+            with gr.Tab(label="8️⃣ Análisis de viajes", id="tab_viajes_analisis") as tab8:
+                via_fn, via_inputs, via_outputs = tab_viajes_analisis.build_tab()
+            tab8.select(fn=via_fn, inputs=via_inputs, outputs=via_outputs)
 
     return demo
 
