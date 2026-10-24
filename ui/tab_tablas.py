@@ -1,6 +1,7 @@
 import gradio as gr
 import polars as pl
 from datetime import date
+from ui import tab_resumen_mes
 from models import gastos_fijos, ingresos, ahorros, responsable_gastos, gastos
 from transforms import resumen as resumen_transform
 from utils.constants import PERSONAS, RESPONSABLE_OPTIONS
@@ -55,7 +56,11 @@ def _sync_table(display_df, state_rows: list[dict], model, display_cols: list[st
 # ── Tab builder ────────────────────────────────────────────────────────────────
 
 def build_tab():
-    """Build the 'Tablas Predeterminadas' tab with 5 sub-tabs."""
+    """Pestaña 'Gastos Fijos' con 6 sub-tabs (la última es 'Resumen del Mes').
+
+    Devuelve (fn_refresco, inputs, outputs, subtab) del tracker mensual para que
+    app.py lo conecte a `subtab.select`.
+    """
 
     with gr.Tabs():
 
@@ -278,3 +283,9 @@ def build_tab():
             )
 
             resumen_mes.change(fn=load_resumen, inputs=[resumen_mes], outputs=[resumen_table])
+
+        # ── Sub-tab 6: Resumen del Mes (tracker de pagos y ahorros) ───────────
+        with gr.Tab(label="Resumen del Mes", id="subtab_resumen_mes") as subtab_resumen_mes:
+            resumen_fn, resumen_inputs, resumen_outputs = tab_resumen_mes.build_tab()
+
+    return resumen_fn, resumen_inputs, resumen_outputs, subtab_resumen_mes

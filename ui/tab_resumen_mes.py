@@ -1,13 +1,50 @@
 import gradio as gr
 import polars as pl
 from datetime import datetime
-from models import pagos_fijos, gastos_fijos, pagos_ahorros, ahorros
+from models import pagos_fijos, gastos_fijos, pagos_ahorros, ahorros, responsable_gastos
+from transforms import tracker
 from utils.constants import PERSONAS
+
+# Configuración de cada tracker: modelos, columnas y textos
+_FIJOS = dict(
+    pagos=pagos_fijos, items=gastos_fijos, id_col="gasto_fijo_id", name_col="gasto",
+    verbo="Pagados", titulo="Tracking de Pagos de Gastos Fijos",
+    label_cbg="{p}: marca lo que ya pagaste", msg="Pago",
+)
+_AHORROS = dict(
+    pagos=pagos_ahorros, items=ahorros, id_col="ahorro_id", name_col="ahorro",
+    verbo="Depositados", titulo="Tracking de Depósitos de Ahorro",
+    label_cbg="{p}: marca lo que ya depositaste", msg="Depósito",
+)
+
+
+def _parse_mes_anio(mes, anio):
+    return int(mes), int(anio)
+
+
+def _estado(cfg, mes, anio):
+    """Lee (y crea si faltan) los pagos del mes y arma el estado del tracker."""
+    mes, anio = _parse_mes_anio(mes, anio)
+    pagos_rows = cfg["pagos"].get_or_create_for_month(mes, anio)
+    items_rows = cfg["items"].get_all()
+    resp_rows = responsable_gastos.get_all()
+    return tracker.estado_tracker(
+        pagos_rows, items_rows, cfg["id_col"], cfg["name_col"], resp_rows, cfg["verbo"]
+    )
+
+
+def _vacio(cfg):
+    col = cfg["name_col"].capitalize()
+    return pl.DataFrame(schema={col: pl.Utf8, **{p: pl.Utf8 for p in PERSONAS}})
 
 
 def build_tab():
-    """Build the 'Resumen del Mes' tab with payment and savings deposit trackers."""
+    """Contenido de 'Resumen del Mes': trackers de gastos fijos y de ahorros.
 
+    Cada tracker son dos CheckboxGroup (uno por persona) con guardado
+    automático al marcar/desmarcar, más una tabla de solo lectura con ✅/⬜/N/A.
+    Devuelve (fn_refresco, inputs, outputs) para conectarlo al select.
+    """
     current_month = datetime.now().month
     current_year = datetime.now().year
 
@@ -20,162 +57,91 @@ def build_tab():
                     ("Julio", 7), ("Agosto", 8), ("Septiembre", 9),
                     ("Octubre", 10), ("Noviembre", 11), ("Diciembre", 12)
                 ],
-                value=current_month,
-                label="Mes",
-                interactive=True
+                value=current_month, label="Mes", interactive=True,
             )
-            anio_input = gr.Number(
-                value=current_year,
-                label="Año",
-                precision=0,
-                interactive=True
+            anio_input = gr.Number(value=current_year, label="Año", precision=0, interactive=True)
+
+    def _seccion(cfg):
+        """Crea los componentes de un tracker y registra sus eventos de guardado."""
+        gr.Markdown(f"### {cfg['titulo']}")
+        try:
+            est = _estado(cfg, current_month, current_year)
+        except Exception:
+            est = None
+
+        cbgs = {}
+        with gr.Row():
+            for p in PERSONAS:
+                cbgs[p] = gr.CheckboxGroup(
+                    choices=est["choices"][p] if est else [],
+                    value=est["pagados"][p] if est else [],
+                    label=cfg["label_cbg"].format(p=p),
+                    interactive=True,
+                )
+        progreso = gr.Markdown(est["progreso"] if est else "Sin datos disponibles.")
+        tabla = gr.Dataframe(
+            value=est["tabla"] if est else _vacio(cfg),
+            interactive=False,
+            label="Estado del mes (✅ hecho · ⬜ pendiente · N/A no corresponde)",
+        )
+
+        def on_input(seleccion, mes, anio, persona):
+            """Guarda solo las diferencias de `persona` respecto a la base."""
+            try:
+                mes_i, anio_i = _parse_mes_anio(mes, anio)
+                actual = _estado(cfg, mes_i, anio_i)
+                sel = set(seleccion or [])
+                previo = set(actual["pagados"][persona])
+                cambios = [
+                    (n, n in sel) for n in actual["choices"][persona]
+                    if (n in sel) != (n in previo)
+                ]
+                for nombre, pagado in cambios:
+                    cfg["pagos"].toggle_pago(actual["ids"][nombre], persona, mes_i, anio_i, pagado)
+                nuevo = _estado(cfg, mes_i, anio_i) if cambios else actual
+            except Exception as e:
+                raise gr.Error(
+                    f"No se pudo guardar el cambio ({e}). "
+                    "Cambia de pestaña y vuelve para recargar el estado real."
+                )
+            if cambios:
+                gr.Info(f"{cfg['msg']} guardado para {persona}: {len(cambios)} cambio(s).")
+            return nuevo["progreso"], nuevo["tabla"]
+
+        def _handler(persona):
+            return lambda sel, mes, anio: on_input(sel, mes, anio, persona)
+
+        for p in PERSONAS:
+            cbgs[p].input(
+                fn=_handler(p),
+                inputs=[cbgs[p], mes_input, anio_input],
+                outputs=[progreso, tabla],
+                show_progress="hidden",
             )
 
-    # ── helpers ────────────────────────────────────────────────────────────────
+        comps = [cbgs[p] for p in PERSONAS] + [progreso, tabla]
+        return comps
 
-    def _parse_mes_anio(mes, anio):
-        return (int(mes) if isinstance(mes, float) else mes,
-                int(anio) if isinstance(anio, float) else anio)
+    fijos_comps = _seccion(_FIJOS)
+    ahorros_comps = _seccion(_AHORROS)
 
-    def to_bool(val):
-        if isinstance(val, bool):
-            return val
-        return str(val).lower() in ("true", "1", "yes")
+    def _updates(cfg, mes, anio):
+        est = _estado(cfg, mes, anio)
+        return (
+            [gr.update(choices=est["choices"][p], value=est["pagados"][p]) for p in PERSONAS]
+            + [est["progreso"], est["tabla"]]
+        )
 
-    def _pivot(rows_df: pl.DataFrame, name_col: str) -> pl.DataFrame:
-        """Pivot (name, persona, pagado) → (Name, Marco, Chiara)."""
-        if rows_df.is_empty():
-            return pl.DataFrame(schema={name_col: pl.Utf8, "Marco": pl.Boolean, "Chiara": pl.Boolean})
-        pivot_data = []
-        for name in rows_df[name_col].unique():
-            name_rows = rows_df.filter(pl.col(name_col) == name)
-            row_data = {name_col: name}
-            for persona in PERSONAS:
-                p_row = name_rows.filter(pl.col("persona") == persona)
-                row_data[persona] = bool(p_row["pagado"][0]) if not p_row.is_empty() else False
-            pivot_data.append(row_data)
-        return pl.DataFrame(pivot_data)
-
-    # ── Gastos Fijos ────────────────────────────────────────────────────────────
-
-    def load_pagos_fijos(mes, anio):
-        mes, anio = _parse_mes_anio(mes, anio)
-        pagos_fijos.get_or_create_for_month(mes, anio)
-
-        pf_rows = pagos_fijos.get_all()
-        pf_df = pl.DataFrame(pf_rows) if pf_rows else pl.DataFrame()
-        if not pf_df.is_empty():
-            pf_df = pf_df.filter((pl.col("mes") == mes) & (pl.col("anio") == anio))
-
-        gf_rows = gastos_fijos.get_all()
-        gf_df = pl.DataFrame(gf_rows) if gf_rows else pl.DataFrame()
-
-        if not pf_df.is_empty() and not gf_df.is_empty():
-            pf_df = pf_df.join(gf_df, left_on="gasto_fijo_id", right_on="id")
-            pf_df = pf_df.select(["gasto", "persona", "pagado"]).rename({"gasto": "Gasto"})
-
-        return _pivot(pf_df, "Gasto") if not pf_df.is_empty() else \
-            pl.DataFrame(schema={"Gasto": pl.Utf8, "Marco": pl.Boolean, "Chiara": pl.Boolean})
-
-    # ── Ahorros ─────────────────────────────────────────────────────────────────
-
-    def load_pagos_ahorros(mes, anio):
-        mes, anio = _parse_mes_anio(mes, anio)
-        pagos_ahorros.get_or_create_for_month(mes, anio)
-
-        pa_rows = pagos_ahorros.get_all()
-        pa_df = pl.DataFrame(pa_rows) if pa_rows else pl.DataFrame()
-        if not pa_df.is_empty():
-            pa_df = pa_df.filter((pl.col("mes") == mes) & (pl.col("anio") == anio))
-
-        ah_rows = ahorros.get_all()
-        ah_df = pl.DataFrame(ah_rows) if ah_rows else pl.DataFrame()
-
-        if not pa_df.is_empty() and not ah_df.is_empty():
-            pa_df = pa_df.join(ah_df, left_on="ahorro_id", right_on="id")
-            pa_df = pa_df.select(["ahorro", "persona", "pagado"]).rename({"ahorro": "Ahorro"})
-
-        return _pivot(pa_df, "Ahorro") if not pa_df.is_empty() else \
-            pl.DataFrame(schema={"Ahorro": pl.Utf8, "Marco": pl.Boolean, "Chiara": pl.Boolean})
-
-    def load_both(mes, anio):
-        return load_pagos_fijos(mes, anio), load_pagos_ahorros(mes, anio)
-
-    # ── UI — Gastos Fijos ───────────────────────────────────────────────────────
-
-    gr.Markdown("### Tracking de Pagos de Gastos Fijos")
-    try:
-        initial_fijos = load_pagos_fijos(current_month, current_year)
-    except Exception:
-        initial_fijos = pl.DataFrame(schema={"Gasto": pl.Utf8, "Marco": pl.Boolean, "Chiara": pl.Boolean})
-
-    payment_table = gr.Dataframe(
-        value=initial_fijos,
-        interactive=True,
-        label="Estado de pagos — marca los checkboxes y presiona Guardar"
-    )
-    save_fijos_btn = gr.Button("💾 Guardar pagos", variant="primary")
-
-    def on_save_fijos(updated_df, mes, anio):
-        if updated_df is None:
-            return load_pagos_fijos(mes, anio)
-        rows_data = updated_df.to_dicts() if isinstance(updated_df, pl.DataFrame) \
-            else updated_df.to_dict(orient="records")
-        if not rows_data:
-            return load_pagos_fijos(mes, anio)
+    def refrescar(mes, anio):
+        """Relee ambos trackers para el mes/año elegido."""
         try:
-            mes, anio = _parse_mes_anio(mes, anio)
-            gf_map = {r["gasto"]: r["id"] for r in gastos_fijos.get_all()}
-            for row in rows_data:
-                gid = gf_map.get(row["Gasto"])
-                if gid:
-                    for persona in PERSONAS:
-                        pagos_fijos.toggle_pago(gid, persona, mes, anio, to_bool(row.get(persona, False)))
-            return load_pagos_fijos(mes, anio)
+            return tuple(_updates(_FIJOS, mes, anio) + _updates(_AHORROS, mes, anio))
         except Exception as e:
-            gr.Error(f"Error al guardar: {str(e)}")
-            return load_pagos_fijos(mes, anio)
+            gr.Warning(f"No se pudo cargar el resumen del mes: {e}")
+            return tuple(gr.update() for _ in range(8))
 
-    # ── UI — Ahorros ────────────────────────────────────────────────────────────
+    outputs = fijos_comps + ahorros_comps
+    mes_input.change(fn=refrescar, inputs=[mes_input, anio_input], outputs=outputs)
+    anio_input.change(fn=refrescar, inputs=[mes_input, anio_input], outputs=outputs)
 
-    gr.Markdown("### Tracking de Depósitos de Ahorro")
-    try:
-        initial_ahorros = load_pagos_ahorros(current_month, current_year)
-    except Exception:
-        initial_ahorros = pl.DataFrame(schema={"Ahorro": pl.Utf8, "Marco": pl.Boolean, "Chiara": pl.Boolean})
-
-    ahorros_table = gr.Dataframe(
-        value=initial_ahorros,
-        interactive=True,
-        label="Estado de depósitos — marca los checkboxes y presiona Guardar"
-    )
-    save_ahorros_btn = gr.Button("💾 Guardar depósitos", variant="primary")
-
-    def on_save_ahorros(updated_df, mes, anio):
-        if updated_df is None:
-            return load_pagos_ahorros(mes, anio)
-        rows_data = updated_df.to_dicts() if isinstance(updated_df, pl.DataFrame) \
-            else updated_df.to_dict(orient="records")
-        if not rows_data:
-            return load_pagos_ahorros(mes, anio)
-        try:
-            mes, anio = _parse_mes_anio(mes, anio)
-            ah_map = {r["ahorro"]: r["id"] for r in ahorros.get_all()}
-            for row in rows_data:
-                aid = ah_map.get(row["Ahorro"])
-                if aid:
-                    for persona in PERSONAS:
-                        pagos_ahorros.toggle_pago(aid, persona, mes, anio, to_bool(row.get(persona, False)))
-            return load_pagos_ahorros(mes, anio)
-        except Exception as e:
-            gr.Error(f"Error al guardar: {str(e)}")
-            return load_pagos_ahorros(mes, anio)
-
-    # ── Events ──────────────────────────────────────────────────────────────────
-
-    mes_input.change(fn=load_both, inputs=[mes_input, anio_input], outputs=[payment_table, ahorros_table])
-    anio_input.change(fn=load_both, inputs=[mes_input, anio_input], outputs=[payment_table, ahorros_table])
-    save_fijos_btn.click(fn=on_save_fijos, inputs=[payment_table, mes_input, anio_input], outputs=[payment_table])
-    save_ahorros_btn.click(fn=on_save_ahorros, inputs=[ahorros_table, mes_input, anio_input], outputs=[ahorros_table])
-
-    return load_both, mes_input, anio_input, payment_table, ahorros_table
+    return refrescar, [mes_input, anio_input], outputs

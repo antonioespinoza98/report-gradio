@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import gradio as gr
 from dotenv import load_dotenv
 from db.connection import init_pool, execute_sql_file
-from ui import (tab_ingresar_gasto, tab_tablas, tab_resumen_mes, tab_visualizaciones,
+from ui import (tab_ingresar_gasto, tab_tablas, tab_visualizaciones,
                 tab_visualizaciones_categoria, tab_metricas, tab_viajes,
                 tab_viajes_analisis)
 
@@ -46,39 +46,37 @@ def build_app():
                 gasto_viajes_fn, gasto_viaje_dd = tab_ingresar_gasto.build_tab()
             tab1.select(fn=gasto_viajes_fn, inputs=[], outputs=[gasto_viaje_dd])
 
-            # Tab 2: Tablas Predeterminadas
-            with gr.Tab(label="2️⃣ Tablas Predeterminadas", id="tab_tablas"):
-                tab_tablas.build_tab()
+            # Tab 2: Gastos Fijos — el sub-tab "Resumen del Mes" (trackers de pagos y
+            # ahorros) se refresca al seleccionarlo, para ver gastos fijos nuevos.
+            # Se conecta solo al sub-tab (no al padre) para no leer/escribir dos veces.
+            with gr.Tab(label="2️⃣ Gastos Fijos", id="tab_gastos_fijos"):
+                resumen_fn, resumen_inputs, resumen_outputs, subtab_resumen = tab_tablas.build_tab()
+            subtab_resumen.select(fn=resumen_fn, inputs=resumen_inputs, outputs=resumen_outputs)
 
-            # Tab 3: Resumen del Mes — auto-refresh on select so new gastos_fijos appear
-            with gr.Tab(label="3️⃣ Resumen del Mes", id="tab_resumen_mes") as tab3:
-                resumen_fn, mes_i, anio_i, pmt_table, ahorros_tbl = tab_resumen_mes.build_tab()
-            tab3.select(fn=resumen_fn, inputs=[mes_i, anio_i], outputs=[pmt_table, ahorros_tbl])
-
-            # Tab 4: Visualizaciones — auto-refresh on select
-            with gr.Tab(label="4️⃣ Visualizaciones", id="tab_visualizaciones") as tab4:
+            # Tab 3: Visualizaciones — auto-refresh on select
+            with gr.Tab(label="3️⃣ Visualizaciones", id="tab_visualizaciones") as tab3:
                 viz_fn, viz_inputs, viz_outputs = tab_visualizaciones.build_tab()
-            tab4.select(fn=viz_fn, inputs=viz_inputs, outputs=viz_outputs)
+            tab3.select(fn=viz_fn, inputs=viz_inputs, outputs=viz_outputs)
 
-            # Tab 5: Visualizaciones por categoría — auto-refresh on select
-            with gr.Tab(label="5️⃣ Visualizaciones - por categoría", id="tab_visualizaciones_categoria") as tab5:
+            # Tab 4: Visualizaciones por categoría — auto-refresh on select
+            with gr.Tab(label="4️⃣ Visualizaciones - por categoría", id="tab_visualizaciones_categoria") as tab4:
                 cat_fn, cat_inputs, cat_outputs = tab_visualizaciones_categoria.build_tab()
-            tab5.select(fn=cat_fn, inputs=cat_inputs, outputs=cat_outputs)
+            tab4.select(fn=cat_fn, inputs=cat_inputs, outputs=cat_outputs)
 
-            # Tab 6: Métricas — auto-refresh on select
-            with gr.Tab(label="6️⃣ Métricas", id="tab_metricas") as tab6:
+            # Tab 5: Métricas — auto-refresh on select
+            with gr.Tab(label="5️⃣ Métricas", id="tab_metricas") as tab5:
                 met_fn, met_inputs, met_outputs = tab_metricas.build_tab()
-            tab6.select(fn=met_fn, inputs=met_inputs, outputs=met_outputs)
+            tab5.select(fn=met_fn, inputs=met_inputs, outputs=met_outputs)
 
-            # Tab 7: Viajes — auto-refresh on select
-            with gr.Tab(label="7️⃣ Viajes", id="tab_viajes") as tab7:
+            # Tab 6: Viajes — auto-refresh on select
+            with gr.Tab(label="6️⃣ Viajes", id="tab_viajes") as tab6:
                 viajes_fn, viajes_tbl = tab_viajes.build_tab()
-            tab7.select(fn=viajes_fn, inputs=[], outputs=[viajes_tbl])
+            tab6.select(fn=viajes_fn, inputs=[], outputs=[viajes_tbl])
 
-            # Tab 8: Análisis de viajes — auto-refresh on select
-            with gr.Tab(label="8️⃣ Análisis de viajes", id="tab_viajes_analisis") as tab8:
+            # Tab 7: Análisis de viajes — auto-refresh on select
+            with gr.Tab(label="7️⃣ Análisis de viajes", id="tab_viajes_analisis") as tab7:
                 via_fn, via_inputs, via_outputs = tab_viajes_analisis.build_tab()
-            tab8.select(fn=via_fn, inputs=via_inputs, outputs=via_outputs)
+            tab7.select(fn=via_fn, inputs=via_inputs, outputs=via_outputs)
 
     return demo
 

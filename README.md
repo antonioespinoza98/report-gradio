@@ -4,7 +4,7 @@ emoji: 💸
 colorFrom: blue
 colorTo: green
 sdk: gradio
-sdk_version: "5.25.0"
+sdk_version: "6.25.0"
 app_file: app.py
 pinned: false
 ---
@@ -16,8 +16,7 @@ App interactiva para registrar y visualizar gastos compartidos entre Marco y Chi
 ## Características
 
 - **Ingresar Gasto**: Formulario interactivo para registrar gastos variables
-- **Tablas Predeterminadas**: Gestión de gastos fijos, ingresos, ahorros y responsables
-- **Resumen Mensual**: Tracking interactivo de pagos de gastos fijos
+- **Gastos Fijos**: gestión de gastos fijos, ingresos, ahorros y responsables, resumen y seguimiento mensual de pagos/depósitos
 - **Visualizaciones**: Gráficos de gastos por categoría, persona, y comparativas
 
 ## Despliegue
