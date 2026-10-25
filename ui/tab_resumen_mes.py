@@ -4,6 +4,7 @@ from datetime import datetime
 from models import pagos_fijos, gastos_fijos, pagos_ahorros, ahorros, responsable_gastos
 from transforms import tracker
 from utils.constants import PERSONAS
+from ui.aviso_saldo import aviso_limites_saldo
 
 # Configuración de cada tracker: modelos, columnas y textos
 _FIJOS = dict(
@@ -64,6 +65,8 @@ def build_tab():
     def _seccion(cfg):
         """Crea los componentes de un tracker y registra sus eventos de guardado."""
         gr.Markdown(f"### {cfg['titulo']}")
+        if cfg is _AHORROS:
+            aviso_limites_saldo(abierto=False)
         try:
             est = _estado(cfg, current_month, current_year)
         except Exception:
@@ -97,7 +100,10 @@ def build_tab():
                     if (n in sel) != (n in previo)
                 ]
                 for nombre, pagado in cambios:
-                    cfg["pagos"].toggle_pago(actual["ids"][nombre], persona, mes_i, anio_i, pagado)
+                    res = cfg["pagos"].toggle_pago(actual["ids"][nombre], persona, mes_i, anio_i, pagado)
+                    # Depósito marcado sin monto: no suma al saldo del fondo (solo ahorros lo devuelve)
+                    if isinstance(res, dict) and res.get("aviso"):
+                        gr.Warning(res["aviso"])
                 nuevo = _estado(cfg, mes_i, anio_i) if cambios else actual
             except Exception as e:
                 raise gr.Error(

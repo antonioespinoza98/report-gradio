@@ -34,20 +34,77 @@ def get_or_create_for_month(mes: int, anio: int):
             cols = [desc[0] for desc in cur.description]
             return [dict(zip(cols, row)) for row in cur.fetchall()]
 
-def toggle_pago(ahorro_id: int, persona: str, mes: int, anio: int, pagado: bool):
-    """Toggle deposit status for a savings entry."""
+# Monto a depositar por (ahorro, persona): responsable_gastos con gasto = nombre del
+# ahorro (sin espacios sobrantes, como el tracker) y responsable = persona. Solo vale
+# si hay exactamente una fila; con 0 (o solo «Ambos») o varias, queda NULL.
+_N_MONTOS = """
+    (SELECT COUNT(*) FROM ahorros a
+     JOIN responsable_gastos r ON btrim(r.gasto) = btrim(a.ahorro)
+     WHERE a.id = p.ahorro_id AND r.responsable = p.persona)
+"""
+_MONTO_ACTUAL = """
+    (SELECT CASE WHEN COUNT(*) = 1 THEN MIN(r.monto) END FROM ahorros a
+     JOIN responsable_gastos r ON btrim(r.gasto) = btrim(a.ahorro)
+     WHERE a.id = p.ahorro_id AND r.responsable = p.persona)
+"""
+
+
+def toggle_pago(ahorro_id: int, persona: str, mes: int, anio: int, pagado: bool) -> dict | None:
+    """Marca o desmarca un depósito y guarda su monto, en una sola sentencia.
+
+    Al marcar, `monto` = monto actual de responsable_gastos para ese ahorro y
+    persona (NULL si no hay exactamente una fila); al desmarcar, NULL.
+    updated_at = NOW() decide si el depósito cuenta después del corte del fondo.
+
+    Devuelve la fila (id, ahorro_id, persona, mes, anio, pagado, monto,
+    updated_at) más `n_montos` (filas encontradas en responsable_gastos) y
+    `aviso` (str en español o None) para que la UI avise si se marcó sin
+    monto. None si la fila del mes no existe.
+    """
     with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                UPDATE pagos_ahorros
-                SET pagado = %s, updated_at = NOW()
-                WHERE ahorro_id = %s AND persona = %s AND mes = %s AND anio = %s
-                RETURNING id, ahorro_id, persona, mes, anio, pagado, updated_at
-            """, (pagado, ahorro_id, persona, mes, anio))
-            cols = [desc[0] for desc in cur.description]
-            result = cur.fetchone()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                    UPDATE pagos_ahorros p
+                    SET pagado = %(pagado)s,
+                        updated_at = NOW(),
+                        monto = CASE WHEN %(pagado)s THEN {_MONTO_ACTUAL} END
+                    WHERE p.ahorro_id = %(ahorro_id)s AND p.persona = %(persona)s
+                      AND p.mes = %(mes)s AND p.anio = %(anio)s
+                    RETURNING p.id, p.ahorro_id, p.persona, p.mes, p.anio, p.pagado,
+                              p.monto, p.updated_at, {_N_MONTOS} AS n_montos
+                """, {
+                    "pagado": bool(pagado), "ahorro_id": ahorro_id, "persona": persona,
+                    "mes": mes, "anio": anio,
+                })
+                cols = [desc[0] for desc in cur.description]
+                result = cur.fetchone()
             conn.commit()
-            return dict(zip(cols, result)) if result else None
+        except Exception:
+            conn.rollback()
+            raise
+    if not result:
+        return None
+    fila = dict(zip(cols, result))
+    fila["aviso"] = aviso_monto(fila)
+    return fila
+
+
+def aviso_monto(fila: dict) -> str | None:
+    """Mensaje para la UI si un depósito quedó marcado sin monto (función pura)."""
+    if not fila.get("pagado") or fila.get("monto") is not None:
+        return None
+    n = fila.get("n_montos") or 0
+    motivo = (
+        "no hay un monto para esa persona en Responsable de Gastos"
+        if n == 0 else
+        f"hay {n} filas para esa persona en Responsable de Gastos y no se sabe cuál usar"
+    )
+    return (
+        f"Depósito de {fila.get('persona')} marcado sin monto: {motivo}. "
+        "No suma al saldo del fondo hasta que se corrija y se vuelva a marcar."
+    )
+
 
 def delete(row_id: int):
     """Delete a savings payment tracking entry."""

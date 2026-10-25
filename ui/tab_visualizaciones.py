@@ -1,73 +1,63 @@
+from datetime import date
+
 import gradio as gr
-from datetime import datetime, timedelta
+
 from models import gastos
-from transforms import visualizaciones
-from utils.constants import PERSONAS
+from transforms import visualizaciones as viz
+from ui import tab_visualizaciones_categoria
+
 
 def build_tab():
-    """Build the 'Visualizaciones' tab (gastos en el tiempo y comparativa de personas)."""
+    """Pestaña 'Visualizaciones': filtros compartidos + sub-tabs 'General' y 'por categoría'.
 
-    gr.Markdown("### Análisis de Gastos")
+    Los filtros (persona, periodo, tipo de gasto) afectan a todos los gráficos. Una sola
+    función `refrescar` lee la base una vez y alimenta ambos sub-tabs.
+    Devuelve (fn, inputs, outputs); app.py la conecta a `tab.select`.
+    """
+    gr.Markdown("### Análisis de gastos variables")
 
-    # Filters for variable expense charts
     with gr.Group():
-        gr.Markdown("#### Filtros — Gastos Variables")
         with gr.Row():
-            persona_filter = gr.Dropdown(
-                choices=PERSONAS + ["Ambos"],
-                value="Ambos",
-                label="Persona",
-                interactive=True
-            )
-
-        with gr.Row():
-            date_from_input = gr.Textbox(
-                label="Desde (YYYY-MM-DD)",
-                value=(datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d"),
-                interactive=True
-            )
-            date_to_input = gr.Textbox(
-                label="Hasta (YYYY-MM-DD)",
-                value=datetime.now().strftime("%Y-%m-%d"),
-                interactive=True
-            )
-
+            persona = gr.Radio(choices=viz.PERSONA_OPCIONES, value="Ambos", label="Persona")
+            periodo = gr.Radio(choices=viz.PERIODOS, value="Últimos 3 meses", label="Periodo")
+            tipo = gr.Dropdown(choices=viz.TIPO_OPCIONES, value=viz.TIPO_TODOS, label="Tipo de gasto")
+    gr.Markdown(
+        "Persona, periodo y tipo de gasto se aplican a todos los gráficos. "
+        "«Últimos 3 meses» = 3 meses completos más el mes en curso. Algunos gráficos comparan "
+        "a Marco con Chiara y lo indican en el propio gráfico."
+    )
+    gr.Markdown(f"*{viz.NOTA_REGISTRADO}*")
     refresh_button = gr.Button("🔄 Actualizar gráficas", variant="primary")
 
-    def load_charts(persona, date_from, date_to):
-        """Load all charts with current filters."""
-        gast_rows = gastos.get_filtered(
-            persona=None,
-            categoria=None,
-            date_from=date_from,
-            date_to=date_to
+    with gr.Tabs():
+        with gr.Tab(label="General", id="subtab_viz_general"):
+            tarjetas = gr.Markdown("")
+            plot_tiempo = gr.Plot(value=viz.figura_inicial(), label="Gasto mensual")
+            plot_registrado = gr.Plot(value=viz.figura_inicial(), label="Registrado por persona")
+        with gr.Tab(label="Visualizaciones - por categoría", id="subtab_viz_categoria"):
+            cat_outputs, cat_calcular = tab_visualizaciones_categoria.build_tab()
+
+    def refrescar(persona_sel, periodo_sel, tipo_sel):
+        """Lee los gastos una sola vez y devuelve los valores de todos los sub-tabs."""
+        hoy = date.today()
+        desde, hasta = viz.rango_periodo(periodo_sel, hoy)
+        try:
+            # Trae a ambas personas siempre: las comparaciones ignoran el filtro de persona.
+            rows = gastos.get_filtered(date_from=desde, date_to=hasta)
+        except Exception:
+            raise gr.Error("No se pudieron leer los gastos. Reintentá en unos segundos.")
+        return (
+            viz.tarjetas_resumen(rows, persona_sel, tipo_sel, desde, hasta, hoy),
+            viz.gastos_en_tiempo(rows, persona_sel, tipo_sel, desde, hasta, hoy),
+            viz.registrado_por_persona(rows, persona_sel, tipo_sel, desde, hasta, hoy),
+            *cat_calcular(rows, persona_sel, tipo_sel, desde, hasta),
         )
 
-        fig2 = visualizaciones.gastos_en_tiempo(gast_rows, date_from=date_from, date_to=date_to)
-        fig3 = visualizaciones.comparativa_personas(gast_rows, date_from=date_from, date_to=date_to)
-        return fig2, fig3
+    inputs = [persona, periodo, tipo]
+    outputs = [tarjetas, plot_tiempo, plot_registrado, *cat_outputs]
 
-    init_date_from = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
-    init_date_to = datetime.now().strftime("%Y-%m-%d")
-
-    try:
-        fig2, fig3 = load_charts("Ambos", init_date_from, init_date_to)
-    except Exception:
-        import plotly.graph_objects as go
-        fig2 = fig3 = go.Figure()
-
-    with gr.Row():
-        plot2 = gr.Plot(value=fig2, label="Gastos en el Tiempo")
-
-    with gr.Row():
-        plot3 = gr.Plot(value=fig3, label="Comparativa de Gastos Variables")
-
-    # ── Wire events ─────────────────────────────────────────────────────────────
-
-    all_inputs = [persona_filter, date_from_input, date_to_input]
-    all_outputs = [plot2, plot3]
-
-    refresh_button.click(fn=load_charts, inputs=all_inputs, outputs=all_outputs)
-    persona_filter.change(fn=load_charts, inputs=all_inputs, outputs=all_outputs)
-
-    return load_charts, all_inputs, all_outputs
+    gr.on(
+        triggers=[persona.change, periodo.change, tipo.change, refresh_button.click],
+        fn=refrescar, inputs=inputs, outputs=outputs,
+    )
+    return refrescar, inputs, outputs

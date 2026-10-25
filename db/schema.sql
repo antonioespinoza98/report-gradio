@@ -62,6 +62,20 @@ CREATE TABLE IF NOT EXISTS responsable_gastos (
 );
 
 -- ============================================================
+-- PRESUPUESTOS: tope mensual por categoría que se consume con
+-- gastos de gastos_variables de la misma categoría (texto).
+-- Los valores iniciales se cargan en
+-- db/migrations/001_presupuestos.sql (no aquí).
+-- ============================================================
+CREATE TABLE IF NOT EXISTS presupuestos (
+    id              SERIAL PRIMARY KEY,
+    nombre          VARCHAR(200)    NOT NULL UNIQUE,
+    categoria       VARCHAR(50)     NOT NULL,
+    monto_mensual   NUMERIC(12, 2)  NOT NULL CHECK (monto_mensual >= 0),
+    responsable     VARCHAR(50)     NOT NULL CHECK (responsable IN ('Marco', 'Chiara', 'Ambos'))
+);
+
+-- ============================================================
 -- PAGOS FIJOS: Tab 3 payment tracking
 -- Each row records whether a persona paid a gasto_fijo
 -- for a given month+year.
@@ -121,3 +135,41 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 CREATE INDEX IF NOT EXISTS idx_gastos_variables_viaje_id ON gastos_variables (viaje_id);
+
+-- ============================================================
+-- FONDOS: cada fila de ahorros es un fondo con saldo.
+-- Mismas definiciones que db/migrations/002_fondos.sql (que además
+-- rellena pagos_ahorros.monto en las filas ya marcadas). Van al
+-- final porque la FK de gastos_variables necesita la tabla ahorros.
+-- saldo = saldo_inicial + depósitos marcados después de fecha_corte
+--         − retiros (gastos con fondo_id) registrados después.
+-- ============================================================
+ALTER TABLE pagos_ahorros ADD COLUMN IF NOT EXISTS monto NUMERIC(12, 2);
+DO $$ BEGIN
+    ALTER TABLE pagos_ahorros ADD CONSTRAINT pagos_ahorros_monto_check CHECK (monto >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+ALTER TABLE ahorros ADD COLUMN IF NOT EXISTS saldo_inicial NUMERIC(12, 2) NOT NULL DEFAULT 0;
+DO $$ BEGIN
+    ALTER TABLE ahorros ADD CONSTRAINT ahorros_saldo_inicial_check CHECK (saldo_inicial >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+ALTER TABLE ahorros ADD COLUMN IF NOT EXISTS fecha_corte TIMESTAMPTZ;
+
+ALTER TABLE gastos_variables ADD COLUMN IF NOT EXISTS fondo_id INTEGER;
+DO $$ BEGIN
+    ALTER TABLE gastos_variables ADD CONSTRAINT gastos_variables_fondo_id_fkey
+        FOREIGN KEY (fondo_id) REFERENCES ahorros(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+ALTER TABLE gastos_variables ADD COLUMN IF NOT EXISTS pagado_por VARCHAR(50);
+DO $$ BEGIN
+    ALTER TABLE gastos_variables ADD CONSTRAINT gastos_variables_pagado_por_check
+        CHECK (pagado_por IN ('Marco', 'Chiara'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_gastos_variables_fondo_id ON gastos_variables (fondo_id);
