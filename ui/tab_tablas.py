@@ -1,5 +1,7 @@
 import logging
 import gradio as gr
+import numpy as np
+import pandas as pd
 import polars as pl
 from datetime import date
 from ui import tab_resumen_mes
@@ -7,11 +9,17 @@ from models import gastos_fijos, ingresos, ahorros, responsable_gastos, gastos, 
 from transforms import fondos as fondos_transform
 from ui.aviso_saldo import aviso_limites_saldo
 from transforms import resumen as resumen_transform
+from transforms import plan as plan_transform
 from transforms import presupuestos as presupuestos_transform
 from utils.constants import PERSONAS, CATEGORIAS, RESPONSABLE_OPTIONS
 from utils.money import eur
 
 logger = logging.getLogger(__name__)
+
+_PLAN_VACIO = pl.DataFrame(
+    {c: [] for c in plan_transform.COLUMNAS},
+    schema={c: (pl.Utf8 if c == "Persona" else pl.Float64) for c in plan_transform.COLUMNAS},
+)
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
@@ -22,11 +30,30 @@ def _safe_load(fn, empty_schema: dict):
     except Exception:
         return pl.DataFrame(empty_schema)
 
-def _to_polars(df) -> pl.DataFrame:
-    """Ensure df is a Polars DataFrame (Gradio sometimes passes pandas)."""
+def _to_polars(df, numericas: tuple[str, ...] = ()) -> pl.DataFrame:
+    """Ensure df is a Polars DataFrame (Gradio sometimes passes pandas).
+
+    Al editar una celda, Gradio devuelve el valor como texto ('753.46') y la
+    columna queda mezclada (floats y str). Las columnas de `numericas` se
+    pasan a número antes (acepta coma decimal); las celdas vacías o no finitas
+    se rechazan acá, antes de escribir nada en la base. Se construye el
+    DataFrame desde registros para no depender de pyarrow.
+    """
     if isinstance(df, pl.DataFrame):
         return df
-    return pl.from_pandas(df)
+    df = df.copy()
+    for col in numericas:
+        if col not in df.columns:
+            continue
+        serie = df[col].map(lambda v: v.strip().replace(",", ".") if isinstance(v, str) else v)
+        try:
+            num = pd.to_numeric(serie)
+        except (ValueError, TypeError):
+            raise gr.Error(f"La columna «{col}» debe contener solo números (por ejemplo 753.46).")
+        if num.isna().any() or not np.isfinite(num.to_numpy(dtype=float)).all():
+            raise gr.Error(f"La columna «{col}» tiene celdas vacías o no numéricas.")
+        df[col] = num.round(2)
+    return pl.DataFrame(df.to_dict("records"))
 
 def _sync_table(display_df, state_rows: list[dict], model, display_cols: list[str]):
     """
@@ -407,7 +434,7 @@ def build_tab():
             )
 
             def save_gf(df, state):
-                df = _to_polars(df)
+                df = _to_polars(df, numericas=("Total",))
                 try:
                     mapped = [{"gasto": r.get("Gasto", ""), "total": r.get("Total", 0)} for r in df.to_dicts()]
                     _sync_table(pl.DataFrame(mapped), state, gastos_fijos, ["gasto", "total"])
@@ -415,12 +442,12 @@ def build_tab():
                     gf_state.value = new_rows
                     return pl.DataFrame({"Gasto": [r["gasto"] for r in new_rows], "Total": [r["total"] for r in new_rows]}), new_rows
                 except Exception as e:
-                    gr.Error(f"Error al guardar: {e}")
-                    return df, state
+                    logger.exception("Error al guardar la tabla")
+                    raise gr.Error(f"Error al guardar: {e}")
 
             with gr.Row():
                 gr.Button("➕ Agregar fila", scale=1).click(
-                    fn=lambda df: df.vstack(pl.DataFrame({"Gasto": [""], "Total": [0.0]})) if isinstance(df, pl.DataFrame) else df,
+                    fn=lambda df: pd.concat([df, pd.DataFrame([{"Gasto": "", "Total": 0.0}])], ignore_index=True),
                     inputs=[gf_table], outputs=[gf_table]
                 )
                 gr.Button("💾 Guardar cambios", variant="primary", scale=1).click(
@@ -450,7 +477,7 @@ def build_tab():
             )
 
             def save_ing(df, state):
-                df = _to_polars(df)
+                df = _to_polars(df, numericas=("Total",))
                 try:
                     new_rows_raw = df.to_dicts() if isinstance(df, pl.DataFrame) else df
                     # Remap display col names → DB col names
@@ -462,12 +489,12 @@ def build_tab():
                     data = {"Tipo de ingreso": [r["tipo_ingreso"] for r in new_rows], "Total": [r["total"] for r in new_rows], "Persona": [r["persona"] for r in new_rows]}
                     return pl.DataFrame(data) if new_rows else pl.DataFrame({"Tipo de ingreso": [], "Total": [], "Persona": []}), new_rows
                 except Exception as e:
-                    gr.Error(f"Error al guardar: {e}")
-                    return df, state
+                    logger.exception("Error al guardar la tabla")
+                    raise gr.Error(f"Error al guardar: {e}")
 
             with gr.Row():
                 gr.Button("➕ Agregar fila", scale=1).click(
-                    fn=lambda df: df.vstack(pl.DataFrame({"Tipo de ingreso": [""], "Total": [0.0], "Persona": [PERSONAS[0]]})) if isinstance(df, pl.DataFrame) else df,
+                    fn=lambda df: pd.concat([df, pd.DataFrame([{"Tipo de ingreso": "", "Total": 0.0, "Persona": PERSONAS[0]}])], ignore_index=True),
                     inputs=[ing_table], outputs=[ing_table]
                 )
                 gr.Button("💾 Guardar cambios", variant="primary", scale=1).click(
@@ -501,7 +528,7 @@ def build_tab():
             )
 
             def save_resp(df, state):
-                df = _to_polars(df)
+                df = _to_polars(df, numericas=("Monto",))
                 try:
                     new_rows_raw = df.to_dicts() if isinstance(df, pl.DataFrame) else df
                     mapped = [{"gasto": r.get("Gasto", ""), "responsable": r.get("Responsable", RESPONSABLE_OPTIONS[0]), "monto": r.get("Monto", 0)} for r in new_rows_raw]
@@ -512,12 +539,12 @@ def build_tab():
                     data = {"Gasto": [r["gasto"] for r in new_rows], "Responsable": [r["responsable"] for r in new_rows], "Monto": [r["monto"] for r in new_rows]}
                     return pl.DataFrame(data) if new_rows else pl.DataFrame({"Gasto": [], "Responsable": [], "Monto": []}), new_rows
                 except Exception as e:
-                    gr.Error(f"Error al guardar: {e}")
-                    return df, state
+                    logger.exception("Error al guardar la tabla")
+                    raise gr.Error(f"Error al guardar: {e}")
 
             with gr.Row():
                 gr.Button("➕ Agregar fila", scale=1).click(
-                    fn=lambda df: df.vstack(pl.DataFrame({"Gasto": [""], "Responsable": [RESPONSABLE_OPTIONS[0]], "Monto": [0.0]})) if isinstance(df, pl.DataFrame) else df,
+                    fn=lambda df: pd.concat([df, pd.DataFrame([{"Gasto": "", "Responsable": RESPONSABLE_OPTIONS[0], "Monto": 0.0}])], ignore_index=True),
                     inputs=[resp_table], outputs=[resp_table]
                 )
                 gr.Button("💾 Guardar cambios", variant="primary", scale=1).click(
@@ -529,11 +556,7 @@ def build_tab():
             _build_presupuestos()
 
         # ── Sub-tab 6: Resumen ─────────────────────────────────────────────────
-        with gr.Tab(label="Resumen"):
-            gr.Markdown("### Resumen de Ingresos y Gastos")
-            gr.Markdown("*El gasto variable no incluye los gastos pagados con un fondo de ahorro: "
-                        "no son gasto de caja del mes.*")
-
+        with gr.Tab(label="Resumen") as subtab_resumen:
             def _month_choices():
                 today = date.today()
                 choices = []
@@ -546,36 +569,106 @@ def build_tab():
                     choices.append(f"{year}-{month:02d}")
                 return choices
 
+            empty_schema = {"Persona": [], "Ingreso": [], "Gasto Variable": [], "Gasto Fijo": [], "Sobrante": []}
+            def refrescar_resumen(mes: str):
+                """Una sola pasada de lecturas alimenta el plan y el real del mes.
+
+                Cada bloque falla por separado: un error de lectura se muestra en su bloque
+                y no rompe el otro.
+                """
+                import calendar
+                errores: dict[str, str] = {}
+
+                def leer(nombre, fn):
+                    try:
+                        return fn()
+                    except Exception as e:
+                        logger.exception("Resumen: no se pudo leer %s", nombre)
+                        if nombre == "presupuestos" and presupuestos_transform.es_tabla_inexistente(e):
+                            errores[nombre] = presupuestos_transform.MENSAJE_SIN_TABLA
+                        else:
+                            errores[nombre] = _msg_error(e)
+                        return None
+
+                ing_rows = leer("ingresos", ingresos.get_all)
+                resp_rows = leer("responsable de gastos", responsable_gastos.get_all)
+                fijos_rows = leer("gastos fijos", gastos_fijos.get_all)
+                pres_rows = leer("presupuestos", presupuestos.get_all)
+                ahor_rows = leer("ahorros", ahorros.get_all)
+
+                # Plan
+                faltan_plan = [n for n in ("ingresos", "responsable de gastos", "gastos fijos",
+                                           "presupuestos", "ahorros") if n in errores]
+                if faltan_plan:
+                    detalle = "; ".join(f"{n}: {errores[n]}" for n in faltan_plan)
+                    plan_out = (plan_transform.plan_para_mostrar(_PLAN_VACIO),
+                                gr.update(value=f"⚠️ No se pudo armar el plan. {detalle}", visible=True),
+                                "No se pudo calcular el plan por un error de lectura.")
+                else:
+                    try:
+                        plan_df, avisos = plan_transform.calc_plan(ing_rows, fijos_rows, resp_rows, pres_rows, ahor_rows)
+                        md = plan_transform.avisos_markdown(avisos)
+                        plan_out = (plan_transform.plan_para_mostrar(plan_df),
+                                    gr.update(value=md, visible=bool(md)),
+                                    plan_transform.conclusion_plan(plan_df))
+                    except Exception as e:
+                        logger.exception("Resumen: error al calcular el plan")
+                        plan_out = (plan_transform.plan_para_mostrar(_PLAN_VACIO),
+                                    gr.update(value=f"⚠️ Error al calcular el plan: {_msg_error(e)}", visible=True),
+                                    "No se pudo calcular el plan.")
+
+                # Real del mes
+                if any(n in errores for n in ("ingresos", "responsable de gastos", "gastos fijos")):
+                    detalle = "; ".join(f"{n}: {errores[n]}" for n in ("ingresos", "responsable de gastos", "gastos fijos") if n in errores)
+                    real_out = (pl.DataFrame(empty_schema), gr.update(value=f"⚠️ No se pudo leer: {detalle}", visible=True))
+                else:
+                    try:
+                        year, month = int(mes.split("-")[0]), int(mes.split("-")[1])
+                        date_from = date(year, month, 1)
+                        date_to = date(year, month, calendar.monthrange(year, month)[1])
+                        # Los retiros de fondos no son gasto de caja del mes
+                        gast_rows = gastos.get_filtered(date_from=date_from, date_to=date_to, excluir_retiros=True)
+                        real_out = (resumen_transform.calc_resumen(ing_rows, gast_rows, resp_rows, fijos_rows),
+                                    gr.update(value="", visible=False))
+                    except Exception as e:
+                        logger.exception("Resumen: error en el real del mes")
+                        real_out = (pl.DataFrame(empty_schema),
+                                    gr.update(value=f"⚠️ No se pudo calcular el real del mes: {_msg_error(e)}", visible=True))
+
+                # orden de outputs: plan_table, plan_aviso, plan_concl, resumen_table, real_aviso
+                return (plan_out[0], plan_out[1], plan_out[2], real_out[0], real_out[1])
+
+            try:
+                _ini = refrescar_resumen(_month_choices()[0])
+            except Exception:
+                logger.exception("Resumen: fallo en la carga inicial")
+                _ini = (plan_transform.plan_para_mostrar(_PLAN_VACIO), gr.update(value="", visible=False),
+                        "", pl.DataFrame(empty_schema), gr.update(value="", visible=False))
+
+            gr.Markdown("### Plan mensual")
+            plan_concl = gr.Markdown(_ini[2])
+            plan_table = gr.Dataframe(value=_ini[0], interactive=False,
+                                      label="Plan mensual (ingreso − lo asignado)")
+            plan_aviso = gr.Markdown(_ini[1]["value"], visible=_ini[1]["visible"])
+            gr.Markdown("*Sobrante = Ingreso − Total asignado. Total asignado = gastos fijos + presupuestos + "
+                        "aportes a ahorros de cada persona, según Responsable de Gastos y Presupuestos.*")
+
+            gr.Markdown("### Real del mes (gasto variable registrado)")
+            gr.Markdown("*Es una referencia, no el plan. No incluye los retiros pagados con un fondo de ahorro "
+                        "(ya excluidos: no son gasto de caja) y el gasto se atribuye a quien lo registró, "
+                        "no al responsable del presupuesto.*")
             resumen_mes = gr.Dropdown(
                 choices=_month_choices(),
                 value=_month_choices()[0],
                 label="Mes",
                 interactive=True,
             )
+            real_aviso = gr.Markdown(_ini[4]["value"], visible=_ini[4]["visible"])
+            resumen_table = gr.Dataframe(value=_ini[3], interactive=False, label="Real del mes")
 
-            def load_resumen(mes: str):
-                year, month = int(mes.split("-")[0]), int(mes.split("-")[1])
-                import calendar
-                last_day = calendar.monthrange(year, month)[1]
-                date_from = date(year, month, 1)
-                date_to = date(year, month, last_day)
-
-                ing_rows = ingresos.get_all()
-                # Los retiros de fondos no son gasto de caja del mes
-                gast_rows = gastos.get_filtered(date_from=date_from, date_to=date_to, excluir_retiros=True)
-                resp_rows = responsable_gastos.get_all()
-                fijos_rows = gastos_fijos.get_all()
-                return resumen_transform.calc_resumen(ing_rows, gast_rows, resp_rows, fijos_rows)
-
-            empty_schema = {"Persona": [], "Ingreso": [], "Gasto Variable": [], "Gasto Fijo": [], "Sobrante": []}
-
-            resumen_table = gr.Dataframe(
-                value=_safe_load(lambda: load_resumen(_month_choices()[0]), empty_schema),
-                interactive=False,
-                label="Resumen"
-            )
-
-            resumen_mes.change(fn=load_resumen, inputs=[resumen_mes], outputs=[resumen_table])
+            resumen_outputs_ui = [plan_table, plan_aviso, plan_concl, resumen_table, real_aviso]
+            resumen_mes.change(fn=refrescar_resumen, inputs=[resumen_mes], outputs=resumen_outputs_ui)
+            subtab_resumen.select(fn=refrescar_resumen, inputs=[resumen_mes], outputs=resumen_outputs_ui)
 
         # ── Sub-tab 7: Resumen del Mes (tracker de pagos y ahorros) ───────────
         with gr.Tab(label="Resumen del Mes", id="subtab_resumen_mes") as subtab_resumen_mes:
