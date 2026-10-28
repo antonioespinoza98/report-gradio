@@ -155,7 +155,9 @@ def build_tab():
                     "pagado_por": pagado_por
                 })
 
-                _avisar_presupuesto(categoria, fecha)
+                # Los gastos personales no consumen presupuesto: no hay nada que avisar.
+                if tipo == "Gasto Común":
+                    _avisar_presupuesto(categoria, fecha)
                 if guardado.get("fondo_id"):
                     _avisar_fondo(guardado)
 

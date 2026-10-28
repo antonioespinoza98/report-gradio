@@ -118,9 +118,11 @@ def get_consumo_mes(mes: int, anio: int) -> list[dict]:
     """Consumo de cada presupuesto en un mes (solo lectura, una consulta).
 
     `gastado` es la suma de gastos_variables.monto de la categoría del
-    presupuesto, de cualquier persona, con fecha dentro del mes; 0.0 si
-    no hubo gastos. Los retiros de un fondo (fondo_id no nulo) no consumen
-    presupuesto: el filtro va en el ON para no perder presupuestos sin gastos. `disponible` = monto_mensual - gastado (negativo si
+    presupuesto, solo de tipo «Gasto Común» (los personales no consumen
+    presupuesto), de cualquier persona, con fecha dentro del mes; 0.0 si
+    no hubo gastos. Los retiros de un fondo (fondo_id no nulo) tampoco consumen
+    presupuesto: los filtros van en el ON para no perder presupuestos sin gastos.
+    `disponible` = monto_mensual - gastado (negativo si
     se superó el tope). Los NUMERIC llegan como float (db/connection.py).
     """
     if not 1 <= int(mes) <= 12:
@@ -143,6 +145,7 @@ def get_consumo_mes(mes: int, anio: int) -> list[dict]:
                       AND g.fecha >= r.inicio
                       AND g.fecha <  r.fin
                       AND g.fondo_id IS NULL
+                      AND g.tipo_de_gasto = 'Gasto Común'
                 GROUP BY p.id, p.nombre, p.categoria, p.monto_mensual, p.responsable
                 ORDER BY p.nombre
                 """,
